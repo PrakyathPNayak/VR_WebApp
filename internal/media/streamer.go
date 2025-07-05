@@ -17,16 +17,12 @@ type StreamerInterface interface {
 }
 
 func StartStreaming(client StreamerInterface, mediaFile string) error {
-    mutex := client.GetStreamingMutex()
-    mutex.Lock()
-    defer mutex.Unlock()
-    
+    log.Printf("Starting video streaming")
     if client.IsStreaming() {
+        log.Printf("Already streaming")
         return fmt.Errorf("already streaming")
     }
-    
     client.SetStreaming(true)
-    
     // Start video streaming
     go func() {
         defer func() {
@@ -48,7 +44,7 @@ func StartStreaming(client StreamerInterface, mediaFile string) error {
             client.SendError(fmt.Sprintf("Failed to stream audio: %v", err))
         }
     }()
-    
+    log.Printf("Done start_vr")
     return nil
 }
 
@@ -60,15 +56,14 @@ func StopStreaming(client StreamerInterface) {
     client.SetStreaming(false)
 }
 
-func StreamVideoFile(client StreamerInterface, mediaFile string) error {
-    log.Printf("Starting to stream video file: %s", mediaFile)
-    
+func StreamVideoFile(client StreamerInterface, mediaFile string) error {    
+    log.Printf("Starting StreamVideoFile")
     videoReader, cleanup, err := CreateVideoStream(mediaFile)
     if err != nil {
         return err
     }
     defer cleanup()
-    
+
     buffer := make([]byte, 1024*32) // 32KB buffer
     for client.IsStreaming() {
         n, err := videoReader.Read(buffer)
@@ -86,7 +81,6 @@ func StreamVideoFile(client StreamerInterface, mediaFile string) error {
             }
         }
     }
-    
     return nil
 }
 

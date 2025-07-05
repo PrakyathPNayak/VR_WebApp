@@ -13,7 +13,7 @@ type Config struct {
 
 func Load() *Config {
     return &Config{
-        ServerAddress: getEnv("SERVER_ADDRESS", ":8080"),
+        ServerAddress: getEnv("SERVER_ADDRESS", "0.0.0.0:8080"),
         MediaDir:      getEnv("MEDIA_DIR", "media"),
         StaticDir:     getEnv("STATIC_DIR", "static"),
         DefaultRoom:   getEnv("DEFAULT_ROOM", "default"),

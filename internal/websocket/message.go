@@ -160,6 +160,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
     switch msgType {
     case "start_vr":
+        go media.StartStreaming(client, "./media/media.mp4")
         client.SendMessage(types.Message{
             Type:    "vr_ready",
             Message: "VR process started",
@@ -174,6 +175,7 @@ func handleControlMessage(client *Client, msgType string, controlMsg map[string]
         
     case "terminate":
         log.Printf("Received terminate command from %s", client.GetPeerID())
+        client.SetStreaming(false)
         return fmt.Errorf("client requested termination")
         
     case "quality":

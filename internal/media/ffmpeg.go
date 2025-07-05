@@ -10,10 +10,13 @@ import (
 
 func CreateVideoStream(mediaFile string) (io.ReadCloser, func(), error) {
     // Check if file exists
+    log.Printf("Checking if file exists")
     if _, err := os.Stat(mediaFile); os.IsNotExist(err) {
+        log.Printf("File does not exist")
         return nil, nil, fmt.Errorf("media file does not exist: %s", mediaFile)
     }
     
+    log.Printf("Creating video stream")
     // Use FFmpeg to read the file and output raw video data
     ffmpegCmd := exec.Command("ffmpeg",
         "-re", // Read at native framerate
@@ -33,7 +36,7 @@ func CreateVideoStream(mediaFile string) (io.ReadCloser, func(), error) {
         "-f", "h264", // Raw H.264 output
         "pipe:1", // Video to stdout
     )
-    
+    log.Printf("Running ffmpeg")
     // Get stdout pipe for video data
     videoOut, err := ffmpegCmd.StdoutPipe()
     if err != nil {
@@ -54,48 +57,46 @@ func CreateVideoStream(mediaFile string) (io.ReadCloser, func(), error) {
             log.Printf("FFmpeg finished with error: %v", err)
         }
     }
-    
     return videoOut, cleanup, nil
 }
 
 func CreateAudioStream(mediaFile string) (io.ReadCloser, func(), error) {
-    // Check if file exists
     if _, err := os.Stat(mediaFile); os.IsNotExist(err) {
         return nil, nil, fmt.Errorf("media file does not exist: %s", mediaFile)
     }
-    
-    // FFmpeg command for audio only
-    ffmpegCmd := exec.Command("ffmpeg",
+
+    cmd := exec.Command("ffmpeg",
         "-re",
         "-i", mediaFile,
+        "-vn", // No video
         "-c:a", "libopus",
         "-ar", "48000",
         "-ac", "2",
         "-b:a", "128k",
-        "-f", "opus",
+        "-f", "ogg",
         "pipe:1",
     )
-    
-    audioOut, err := ffmpegCmd.StdoutPipe()
+
+
+    cmd.Stderr = os.Stderr
+
+    audioOut, err := cmd.StdoutPipe()
     if err != nil {
-        return nil, nil, fmt.Errorf("failed to get FFmpeg audio stdout pipe: %w", err)
+        return nil, nil, fmt.Errorf("failed to get stdout pipe: %w", err)
     }
-    
-    if err := ffmpegCmd.Start(); err != nil {
-        return nil, nil, fmt.Errorf("failed to start FFmpeg for audio: %w", err)
+
+    if err := cmd.Start(); err != nil {
+        return nil, nil, fmt.Errorf("failed to start ffmpeg: %w", err)
     }
-    
+
     cleanup := func() {
-        if err := ffmpegCmd.Process.Kill(); err != nil {
-            log.Printf("Error killing FFmpeg audio process: %v", err)
-        }
-        if err := ffmpegCmd.Wait(); err != nil {
-            log.Printf("FFmpeg audio finished with error: %v", err)
-        }
+        _ = cmd.Process.Kill()
+        _ = cmd.Wait()
     }
-    
+    log.Printf("Finished encoding audio")
     return audioOut, cleanup, nil
 }
+
 
 func ValidateMediaFile(mediaFile string) error {
     // Check if file exists

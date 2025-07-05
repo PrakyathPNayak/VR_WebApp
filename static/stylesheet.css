@@ -1,0 +1,83 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #eee;
+  margin: 0;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 20px;
+  background: #222;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+#videoElement {
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  background: black;
+  border: none;
+}
+
+.controls,
+.quality-control {
+  text-align: center;
+  margin: 10px 0;
+}
+
+button {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 5px;
+  background: #007bff;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0056b3;
+}
+
+button:disabled {
+  background: #666;
+}
+
+.status {
+  text-align: center;
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.status.connected {
+  background: #155724;
+  color: #d4edda;
+}
+
+.status.error {
+  background: #721c24;
+  color: #f8d7da;
+}
+
+.status.webrtc {
+  background: #0c5460;
+  color: #bee5eb;
+}
+
+.peer-list {
+  margin: 10px 0;
+  padding: 10px;
+  background: #333;
+  border-radius: 5px;
+}
+
+.peer-item {
+  padding: 5px;
+  margin: 2px 0;
+  background: #444;
+  border-radius: 3px;
+}

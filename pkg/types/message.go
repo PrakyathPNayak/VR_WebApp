@@ -19,7 +19,7 @@ type Message struct {
     // WebRTC specific fields
     Offer     *webrtc.SessionDescription `json:"offer,omitempty"`
     Answer    *webrtc.SessionDescription `json:"answer,omitempty"`
-    Candidate *webrtc.ICECandidate       `json:"candidate,omitempty"`
+    Candidate *webrtc.ICECandidateInit   `json:"candidate,omitempty"`
     From      string                     `json:"from,omitempty"`
     Target    string                     `json:"target,omitempty"`
     

@@ -70,9 +70,10 @@ func SetupPeerConnection(client PeerInterface) error {
     // Set up ICE candidate handling
     peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
         if candidate != nil {
+            candidateInit := candidate.ToJSON()
             client.SendMessage(types.Message{
                 Type:      "webrtc_ice_candidate",
-                Candidate: candidate,
+                Candidate: &candidateInit,
                 From:      client.GetPeerID(),
             })
         }
@@ -156,11 +157,5 @@ func HandleICECandidate(client PeerInterface, msg types.Message) error {
     }
 
     peerConnection := client.GetPeerConnection()
-    candidateJSON := msg.Candidate.ToJSON()
-    
-    return peerConnection.AddICECandidate(webrtc.ICECandidateInit{
-        Candidate:     candidateJSON.Candidate,
-        SDPMLineIndex: candidateJSON.SDPMLineIndex,
-        SDPMid:        candidateJSON.SDPMid,
-    })
+    return peerConnection.AddICECandidate(*msg.Candidate)
 }

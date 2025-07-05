@@ -3,7 +3,7 @@ package server
 import (
 	"log"
 	"net/http"
-
+	"path/filepath"
 	"VR-Distributed/internal/config"
 	"VR-Distributed/internal/websocket"
 )
@@ -17,9 +17,21 @@ func New(cfg *config.Config) *Server {
 }
 
 func (s *Server) Start() error {
-	// Serve static frontend files (stream.html, js, etc.)
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-
+	// Serve static frontend files with proper MIME types
+	http.Handle("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set MIME type based on file extension, gave errors as go was serving them as plain text
+		switch filepath.Ext(r.URL.Path) {
+		case ".css":
+			w.Header().Set("Content-Type", "text/css")
+		case ".js":
+			w.Header().Set("Content-Type", "application/javascript")
+		case ".html":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		}
+		// Serve the file
+		http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP(w, r)
+	}))
+	
 	// Serve the default video page
 	http.HandleFunc("/video", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/stream.html")
@@ -27,7 +39,7 @@ func (s *Server) Start() error {
 
 	// Register the WebSocket endpoint for WebRTC signaling
 	http.HandleFunc("/ws/webrtc/", websocket.HandleWebRTCWS)
-
+	
 	// Start the HTTP server
 	log.Printf("Starting server on %s", s.cfg.ServerAddress)
 	return http.ListenAndServe(s.cfg.ServerAddress, nil)
