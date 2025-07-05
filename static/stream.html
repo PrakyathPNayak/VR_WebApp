@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebRTC VR Stream</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+    
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #111;
+        color: #eee;
+        margin: 0;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #222;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+      }
+      #videoElement {
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        background: black;
+        border: none;
+      }
+      .controls,
+      .quality-control {
+        text-align: center;
+        margin: 10px 0;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        border: none;
+        border-radius: 5px;
+        background: #007bff;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      button:disabled {
+        background: #666;
+      }
+      .status {
+        text-align: center;
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+      }
+      .status.connected {
+        background: #155724;
+        color: #d4edda;
+      }
+      .status.error {
+        background: #721c24;
+        color: #f8d7da;
+      }
+      .status.webrtc {
+        background: #0c5460;
+        color: #bee5eb;
+      }
+      .peer-list {
+        margin: 10px 0;
+        padding: 10px;
+        background: #333;
+        border-radius: 5px;
+      }
+      .peer-item {
+        padding: 5px;
+        margin: 2px 0;
+        background: #444;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>WebRTC VR Stream</h1>
+      <div id="status" class="status">Connecting...</div>
+      
+      <!-- WebRTC Video Element -->
+      <video id="videoElement" autoplay muted playsinline></video>
+
+      <div class="controls">
+        <button id="startVrBtn" onclick="startVR()">Start VR</button>
+        <button onclick="sendControl('pause')">Pause</button>
+        <button onclick="sendControl('resume')">Resume</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button id="fullscreenBtn" style="float:right;">Fullscreen</button>
+        <button id="vrDebugBtn" style="float:right; margin-right: 10px; background: #28a745;">VR Debugging: OFF</button>
+      </div>
+
+      <div class="quality-control">
+        <label for="quality">Stream Quality:</label>
+        <input type="range" id="quality" min="1" max="100" value="80" />
+        <span id="qualityValue">80</span>
+        <button onclick="setQuality()">Apply</button>
+      </div>
+
+      <!-- Peer connection info -->
+      <div id="peerList" class="peer-list" style="display: none;">
+        <h3>Connected Peers:</h3>
+        <div id="peerItems"></div>
+      </div>
+
+      <!-- Gyro enable button for iOS/permissioned browsers -->
+      <button id="enableGyroBtn" style="display: none; margin-top: 10px;">
+        Enable Motion Tracking
+      </button>
+    </div>
+
+    <script>
+const videoElement = document.getElementById("videoElement");
+const statusDiv = document.getElementById("status");
+const qualitySlider = document.getElementById("quality");
+const qualityValue = document.getElementById("qualityValue");
+const startVrBtn = document.getElementById("startVrBtn");
+const peerListDiv = document.getElementById("peerList");
+const peerItemsDiv = document.getElementById("peerItems");
+const vrDebugBtn = document.getElementById("vrDebugBtn");
+let vrDebugging = false;
+
+let socket,
+  aesKey,
+  iv,
+  isConnected = false,
+  streamReady = false,
+  vrStarted = false;
+
+// WebRTC variables
+let localPeerConnection = null;
+let remotePeerConnection = null;
+let localStream = null;
+let myPeerId = null;
+let roomName = 'default';
+let peers = new Map();
+
+let lastSentTime = 0;
+const gyroInterval = 50;
+
+qualitySlider.oninput = () => {
+  qualityValue.textContent = qualitySlider.value;
+};
+
+function updateStatus(msg, type = "") {
+  statusDiv.textContent = msg;
+  statusDiv.className = `status ${type}`;
+}
+
+function updatePeerList() {
+  if (peers.size === 0) {
+    peerListDiv.style.display = 'none';
+    return;
+  }
+  
+  peerListDiv.style.display = 'block';
+  peerItemsDiv.innerHTML = '';
+  peers.forEach((peer, peerId) => {
+    const div = document.createElement('div');
+    div.className = 'peer-item';
+    div.textContent = `Peer: ${peerId} (${peer.state || 'unknown'})`;
+    peerItemsDiv.appendChild(div);
+  });
+}
+
+function connect() {
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${protocol}://${window.location.host}/ws/webrtc/${roomName}/`;
+  socket = new WebSocket(wsUrl);
+  socket.binaryType = "arraybuffer";
+
+  socket.onopen = () => {
+    isConnected = true;
+    updateStatus("Connected. Awaiting initialization...", "connected");
+  };
+
+  socket.onclose = () => {
+    updateStatus("Connection closed", "error");
+    isConnected = false;
+    streamReady = false;
+    vrStarted = false;
+    startVrBtn.disabled = false;
+    peers.clear();
+    updatePeerList();
+  };
+
+  socket.onerror = () => {
+    updateStatus("WebSocket error", "error");
+  };
+
+  socket.onmessage = async (event) => {
+    if (typeof event.data === "string") {
+      const msg = JSON.parse(event.data);
+      await handleMessage(msg);
+    } else {
+      // Handle binary data if needed for control messages
+      await handleEncryptedMessage(event.data);
+    }
+  };
+}
+
+function base64Encode(buffer) {
+  return btoa(String.fromCharCode(...buffer));
+}
+
+function base64Decode(str) {
+  return new Uint8Array([...atob(str)].map((c) => c.charCodeAt(0)));
+}
+
+async function performKeyExchange(encodedPem) {
+  const pem = atob(encodedPem);
+  const encrypt = new JSEncrypt();
+  encrypt.setPublicKey(pem);
+
+  const aesKeyRaw = crypto.getRandomValues(new Uint8Array(32));
+  iv = crypto.getRandomValues(new Uint8Array(12));
+
+  aesKey = await crypto.subtle.importKey(
+    "raw",
+    aesKeyRaw,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"]
+  );
+
+  // Convert raw bytes to base64 for RSA encryption
+  const aesKeyB64 = btoa(String.fromCharCode(...aesKeyRaw));
+  const encryptedKey = encrypt.encrypt(aesKeyB64);
+
+  socket.send(
+    JSON.stringify({
+      type: "aes_key_exchange",
+      encrypted_key: encryptedKey,
+      iv: base64Encode(iv),
+    })
+  );
+}
+
+// WebRTC Functions
+async function createPeerConnection(peerId) {
+  const config = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+
+  const pc = new RTCPeerConnection(config);
+
+  // Ensure the offer includes a video media section
+  if (!pc.getTransceivers().some(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'video')) {
+    pc.addTransceiver('video', {
+      direction: 'recvonly',
+      sendEncodings: [{ maxFramerate: 60 }]
+    });
+  }
+
+  // Set maxBitrate for video sender (if sending video)
+  pc.addEventListener('track', () => {
+    setTimeout(() => {
+      pc.getSenders().forEach(sender => {
+        if (sender.track && sender.track.kind === 'video') {
+          const params = sender.getParameters();
+          if (!params.encodings) params.encodings = [{}];
+          params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps
+          sender.setParameters(params);
+          console.log('[WebRTC] Set maxBitrate to 5 Mbps for video sender');
+        }
+      });
+    }, 0);
+  });
+
+  setInterval(() => {
+    pc.getStats(null).then(stats => {
+      stats.forEach(report => {
+        if (report.type === 'inbound-rtp') {
+          console.log("🎥 Inbound RTP stats:", report);
+        }
+      });
+    });
+  }, 1000);
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate && event.candidate.candidate !== "") {
+      console.log('Sending ICE candidate:', event.candidate);
+      socket.send(JSON.stringify({
+        type: 'webrtc_ice_candidate',
+        candidate: event.candidate,
+        target: myPeerId
+      }));
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log("ICE State:", pc.iceConnectionState);
+    const peer = peers.get(peerId);
+    if (peer) {
+      peer.state = pc.connectionState;
+      updatePeerList();
+    }
+    
+    if (pc.connectionState === 'connected') {
+      updateStatus("WebRTC connection established", "webrtc");
+    } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      updateStatus("WebRTC connection lost", "error");
+    }
+  };
+
+  pc.ontrack = (event) => {
+    console.log('Received remote stream (ontrack event):', event);
+    videoElement.srcObject = event.streams[0];
+    videoElement.autoplay = true;
+    videoElement.play().catch(console.error)
+    updateStatus("Receiving WebRTC video stream", "webrtc");
+  };
+
+  return pc;
+}
+
+async function createOffer(peerId) {
+  try {
+    const pc = await createPeerConnection(peerId);
+    peers.set(peerId, { pc, state: 'connecting' });
+    updatePeerList();
+
+    // Add local stream if available (for two-way communication)
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        pc.addTrack(track, localStream);
+      });
+    }
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    // Sanitize offer before sending
+    if (!offer || !offer.sdp || !offer.type) {
+      console.error("Generated invalid WebRTC offer:", offer);
+      return;
+    }
+    console.log('Sending WebRTC offer:', offer);
+
+    socket.send(JSON.stringify({
+      type: 'webrtc_offer',
+      offer: offer,
+      target: peerId
+    }));
+  } catch (error) {
+    console.error('Error creating offer:', error);
+    updateStatus("Failed to create WebRTC offer", "error");
+  }
+}
+
+async function handleOffer(offer, fromPeer) {
+  try {
+    const pc = await createPeerConnection(fromPeer);
+    peers.set(fromPeer, { pc, state: 'connecting' });
+    updatePeerList();
+
+    await pc.setRemoteDescription(offer);
+    console.log('Received WebRTC offer:', offer);
+    // Add local stream if available
+    console.log("Adding local stream to PeerConnection for:", fromPeer);
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        pc.addTrack(track, localStream);
+      });
+    }
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    console.log('Sending WebRTC answer:', answer);
+
+    socket.send(JSON.stringify({
+      type: 'webrtc_answer',
+      answer: answer,
+      target: fromPeer
+    }));
+  } catch (error) {
+    console.error('Error handling offer:', error);
+    updateStatus("Failed to handle WebRTC offer", "error");
+  }
+}
+
+async function handleAnswer(answer, fromPeer) {
+  const peer = peers.get(fromPeer);
+  if (peer && peer.pc) {
+    console.log('Received WebRTC answer:', answer);
+    await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+  }
+}
+
+async function handleIceCandidate(candidate, fromPeer) {
+  const peer = peers.get(fromPeer);
+  if (peer && peer.pc) {
+    try {
+      candidate.sdpMid = "video"
+      candidate.sdpMLineIndex = 1
+      console.log('Adding ICE candidate:', candidate);
+      await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log('Added ICE candidate:', candidate);
+    } catch (err) {
+      console.error('ICE candidate add failed', err, candidate);
+    }
+  }
+}
+
+async function handleMessage(msg) {
+  switch (msg.type) {
+    case "init":
+      myPeerId = msg.peer_id;
+      roomName = msg.room;
+      await performKeyExchange(msg.rsa_public_key);
+      break;
+      
+    case "key_exchange_complete":
+      updateStatus("Encryption established. Ready to start VR.", "connected");
+      startVrBtn.disabled = false;
+      break;
+      
+    case "vr_ready":
+      updateStatus("VR process started. Establishing WebRTC...", "webrtc");
+      vrStarted = true;
+      startVrBtn.disabled = true;
+      
+      // 🔥 Initiate WebRTC connection to the server itself
+      await createOffer(myPeerId);
+
+      break;
+
+      
+    case "status":
+      updateStatus(msg.message, "connected");
+      break;
+      
+    case "error":
+      updateStatus(`Error: ${msg.message}`, "error");
+      if (msg.message.includes("VR")) {
+        startVrBtn.disabled = false;
+        vrStarted = false;
+      }
+      break;
+
+    // WebRTC signaling messages
+    case "peer_joined":
+      console.log('Peer joined:', msg.peer_id);
+      // Initiate connection to new peer if VR is started
+      if (vrStarted && msg.peer_id !== myPeerId) {
+        await createOffer(msg.peer_id);
+      }
+      break;
+      
+    case "peer_left":
+      console.log('Peer left:', msg.peer_id);
+      const peer = peers.get(msg.peer_id);
+      if (peer && peer.pc) {
+        peer.pc.close();
+        peers.delete(msg.peer_id);
+        updatePeerList();
+      }
+      break;
+      
+    case "webrtc_offer":
+      await handleOffer(msg.offer, msg.from);
+      break;
+      
+    case "answer":
+      console.log('Received WebRTC answer:', msg.answer);
+      await handleAnswer(msg.answer, msg.from);
+      break;
+      
+    case "webrtc_ice_candidate":
+      await handleIceCandidate(msg.candidate, msg.from);
+      break;
+    
+    case "vr_debugging_status":
+      vrDebugging = msg.enabled;
+      vrDebugBtn.textContent = `VR Debugging: ${vrDebugging ? 'ON' : 'OFF'}`;
+      vrDebugBtn.style.background = vrDebugging ? '#ffc107' : '#28a745';
+      break;
+    
+    default:
+      console.warn("Unknown message type:", msg.type);
+      break;
+  }
+}
+
+async function handleEncryptedMessage(data) {
+  if (!aesKey) return;
+
+  const nonceSize = 12;
+  const tagSize = 16;
+
+  if (data.byteLength < nonceSize + tagSize) return;
+
+  const nonce = data.slice(0, nonceSize);
+  const ciphertext = data.slice(nonceSize, data.byteLength - tagSize);
+  const tag = data.slice(data.byteLength - tagSize);
+
+  const fullData = new Uint8Array(ciphertext.byteLength + tag.byteLength);
+  fullData.set(new Uint8Array(ciphertext), 0);
+  fullData.set(new Uint8Array(tag), ciphertext.byteLength);
+
+  try {
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: nonce,
+        tagLength: 128,
+      },
+      aesKey,
+      fullData
+    );
+
+    const msg = JSON.parse(new TextDecoder().decode(decrypted));
+    await handleMessage(msg);
+  } catch (e) {
+    console.warn("Failed to decrypt control message", e);
+  }
+}
+
+async function sendEncryptedMessage(messageObj) {
+  if (!aesKey || !iv || !isConnected) return;
+
+  const encoded = new TextEncoder().encode(JSON.stringify(messageObj));
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+
+  try {
+    const encrypted = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: nonce,
+        tagLength: 128,
+      },
+      aesKey,
+      encoded
+    );
+
+    const nonceAndEncrypted = new Uint8Array(nonce.byteLength + encrypted.byteLength);
+    nonceAndEncrypted.set(nonce, 0);
+    nonceAndEncrypted.set(new Uint8Array(encrypted), nonce.byteLength);
+
+    socket.send(nonceAndEncrypted.buffer);
+  } catch (e) {
+    console.error("Failed to encrypt message:", e);
+  }
+}
+
+function startVR() {
+  if (!isConnected || !aesKey) {
+    updateStatus("Not ready to start VR", "error");
+    return;
+  }
+  
+  updateStatus("Starting VR process...", "connected");
+  startVrBtn.disabled = true;
+  sendEncryptedMessage({ type: "start_vr" });
+}
+
+function sendControl(type) {
+  sendEncryptedMessage({ type });
+}
+
+function setQuality() {
+  const value = parseInt(qualitySlider.value);
+  if (!isNaN(value)) {
+    sendEncryptedMessage({ type: "quality", value });
+  }
+}
+
+function disconnect() {
+  // Close all peer connections
+  peers.forEach((peer) => {
+    if (peer.pc) {
+      peer.pc.close();
+    }
+  });
+  peers.clear();
+  updatePeerList();
+  
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  
+  sendEncryptedMessage({ type: "terminate" });
+  socket.close();
+}
+
+const enableGyroBtn = document.getElementById("enableGyroBtn");
+
+async function enableGyro() {
+  if (
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof DeviceOrientationEvent.requestPermission === "function"
+  ) {
+    enableGyroBtn.style.display = "inline-block";
+    enableGyroBtn.textContent = "Tap to Enable Motion Tracking";
+    enableGyroBtn.onclick = async () => {
+      console.log("Permission button clicked");
+      try {
+        const response = await DeviceOrientationEvent.requestPermission();
+        if (response !== "granted") {
+          updateStatus("Motion tracking access denied", "error");
+          return;
+        }
+        setupGyroListener();
+        enableGyroBtn.style.display = "none";
+        updateStatus("Motion tracking enabled", "connected");
+      } catch (e) {
+        console.error("Permission request failed", e);
+        updateStatus("Motion tracking permission failed", "error");
+      }
+    };
+  } else {
+    setupGyroListener();
+  }
+}
+
+function setupGyroListener() {
+  const isAndroid = false;
+  console.log("Setting up motion tracking. Android:", isAndroid);
+
+  window.addEventListener(
+    "deviceorientation",
+    (event) => {
+      const now = Date.now();
+      if (!socket || !isConnected || now - lastSentTime < gyroInterval) return;
+
+      let { alpha, beta, gamma } = event;
+      const orientation = screen.orientation?.angle || 0;
+
+      if (isAndroid) {
+        if (orientation === 0) { // portrait
+          beta = -beta;
+          gamma = -gamma;
+        } else if (orientation === 90 || orientation === -90) { // landscape
+          // Swap and invert gamma
+          [beta, gamma] = [gamma, beta];
+          gamma = -gamma;
+        }
+      }
+
+      socket.send(
+        JSON.stringify({
+          type: "gyro",
+          alpha,
+          beta,
+          gamma,
+          timestamp: now,
+        })
+      );
+
+      lastSentTime = now;
+    },
+    true
+  );
+}
+
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+fullscreenBtn.onclick = async () => {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+    }
+  } catch (e) {
+    console.warn('Orientation lock failed:', e);
+  }
+
+  if (videoElement.requestFullscreen) {
+    videoElement.requestFullscreen();
+  } else if (videoElement.webkitRequestFullscreen) {
+    videoElement.webkitRequestFullscreen();
+  } else if (videoElement.msRequestFullscreen) {
+    videoElement.msRequestFullscreen();
+  }
+};
+
+// Initialize local media stream (optional - for two-way communication)
+async function initLocalStream() {
+  try {
+    const constraints = {
+      video: {
+        frameRate: { ideal: 60, max: 120 },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      audio: false
+    };
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (error) {
+    console.log('No local media stream needed or available');
+  }
+}
+
+window.onload = async () => {
+  connect();
+  enableGyro();
+  // await initLocalStream(); // Uncomment if you need two-way communication
+  
+  function resizeVideo() {
+    const container = document.querySelector('.container');
+    if (container) {
+      videoElement.style.maxWidth = '100%';
+      videoElement.style.height = 'auto';
+    }
+  }
+  resizeVideo();
+  window.addEventListener('resize', resizeVideo);
+};
+
+window.onbeforeunload = () => {
+  disconnect();
+};
+
+vrDebugBtn.onclick = function() {
+  vrDebugging = !vrDebugging;
+  sendEncryptedMessage({ type: "toggle_vr_debugging", enabled: vrDebugging });
+  vrDebugBtn.textContent = `VR Debugging: ${vrDebugging ? 'ON' : 'OFF'}`;
+  vrDebugBtn.style.background = vrDebugging ? '#ffc107' : '#28a745';
+  updateStatus(`VR Debugging ${vrDebugging ? 'enabled' : 'disabled'}.`, "connected");
+};
+    </script>
+  </body>
+</html>
