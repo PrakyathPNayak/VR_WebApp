@@ -3,10 +3,11 @@ package websocket
 import (
     "sync"
     "time"
+    "fmt"
     "github.com/gorilla/websocket"
     "github.com/pion/webrtc/v3"
     "VR-Distributed/internal/crypto"
-    "VR-Distributedr/pkg/types"
+    "VR-Distributed/pkg/types"
 )
 
 type Client struct {

@@ -3,7 +3,8 @@ package websocket
 import (
     "log"
     "sync"
-    "webrtc-media-server/pkg/types"
+    "fmt"
+    "VR-Distributed/pkg/types"
 )
 
 type Room struct {

@@ -5,10 +5,10 @@ import (
     "fmt"
     "log"
     
-    "webrtc-media-server/internal/crypto"
-    "webrtc-media-server/internal/media"
-    "webrtc-media-server/internal/webrtc"
-    "webrtc-media-server/pkg/types"
+    "VR-Distributed/internal/crypto"
+    "VR-Distributed/internal/media"
+    "VR-Distributed/internal/webrtc"
+    "VR-Distributed/pkg/types"
 )
 
 func HandleJSONMessage(client *Client, data []byte, room *Room) error {

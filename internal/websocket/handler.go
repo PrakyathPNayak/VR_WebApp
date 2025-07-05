@@ -1,7 +1,6 @@
 package websocket
 
 import (
-    "encoding/json"
     "fmt"
     "log"
     "net/http"
@@ -9,9 +8,9 @@ import (
     "time"
     
     "github.com/gorilla/websocket"
-    "webrtc-media-server/internal/crypto"
-    "webrtc-media-server/internal/webrtc"
-    "webrtc-media-server/pkg/types"
+    "VR-Distributed/internal/crypto"
+    "VR-Distributed/internal/webrtc"
+    "VR-Distributed/pkg/types"
 )
 
 var (

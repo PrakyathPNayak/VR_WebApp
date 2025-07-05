@@ -6,7 +6,7 @@ import (
     "time"
     
     "github.com/pion/webrtc/v3"
-    "webrtc-media-server/pkg/types"
+    "VR-Distributed/pkg/types"
 )
 
 type PeerInterface interface {
