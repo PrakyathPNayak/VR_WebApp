@@ -7,6 +7,8 @@ require (
 	github.com/pion/webrtc/v3 v3.2.24
 )
 
+require github.com/edsrzf/mmap-go v1.2.0 // indirect
+
 require (
 	github.com/3d0c/gmf v0.0.0-20220906170454-be727bc5b56c
 	github.com/aler9/gortsplib v1.0.1 // indirect

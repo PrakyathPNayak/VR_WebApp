@@ -32,7 +32,7 @@ class WebRTCManager {
     ) {
       pc.addTransceiver("video", {
         direction: "recvonly",
-        sendEncodings: [{ maxFramerate: 60 }],
+        sendEncodings: [{ maxFramerate: 120 }],
       });
     }
 

@@ -134,9 +134,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 
 	go func() {
 		defer func() {
-			client.GetStreamingMutex().Lock()
 			client.SetStreaming(false)
-			client.GetStreamingMutex().Unlock()
 		}()
 
 		vr, err := StartVRProcess(exePath, room)
@@ -272,7 +270,6 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 			lastLogTime = now
 		}
 	}
-
 	log.Println("Stream ended")
 	return nil
 }

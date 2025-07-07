@@ -9,7 +9,17 @@ import (
     "VR-Distributed/internal/webrtc"
     "VR-Distributed/pkg/types"
     "VR-Distributed/internal/config"
+    "time"
 )
+
+var gyroWriter *SharedMemoryWriter
+
+func InitGyroWriter() error {
+    var err error
+    gyroWriter, err = NewSharedMemoryWriter("gyro.dat", 65536)
+    return err
+}
+
 
 func HandleJSONMessage(client *Client, data []byte, room *Room) error {
     var msg types.Message
@@ -80,6 +90,9 @@ func handleAESKeyExchange(client *Client, msg types.Message) error {
     }
     
     ack := types.Message{Type: "key_exchange_complete"}
+    if err := InitGyroWriter(); err != nil {
+    log.Fatal("Failed to initialize gyro shared memory:", err)
+    }
     return client.SendMessage(ack)
 }
 
@@ -153,10 +166,20 @@ func handleEncryptedData(client *Client, msg types.Message) error {
 }
 
 func handleGyroData(client *Client, msg types.Message) error {
-    log.Printf("Received gyro data from %s: alpha=%f, beta=%f, gamma=%f", 
-        client.GetPeerID(), msg.Alpha, msg.Beta, msg.Gamma)
+    data := map[string]interface{}{
+        "alpha":     msg.Alpha,
+        "beta":      msg.Beta,
+        "gamma":     msg.Gamma,
+        "timestamp": time.Now().UnixMilli(),
+    }
+
+    if err := gyroWriter.WriteJSON(data); err != nil {
+        log.Println("Error writing gyro data to shared memory:", err)
+    }
+
     return nil
 }
+
 
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
     switch msgType {
@@ -178,6 +201,7 @@ func handleControlMessage(client *Client, msgType string, controlMsg map[string]
     case "terminate":
         log.Printf("Received terminate command from %s", client.GetPeerID())
         client.SetStreaming(false)
+        gyroWriter.Close()
         return fmt.Errorf("client requested termination")
         
     case "quality":
