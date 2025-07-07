@@ -22,12 +22,11 @@ func WriteVideoSample(client MediaInterface, data []byte) error {
     if !client.IsStreaming() {
         return nil
     }
-    
     videoTrack := client.GetVideoTrack()
     if videoTrack == nil {
         return fmt.Errorf("video track not available")
     }
-    // log.Printf("Writing video track")
+    log.Printf("Writing video track")
     sample := media.Sample{
         Data:     data,
         Duration: 33 * time.Millisecond, // ~30 FPS

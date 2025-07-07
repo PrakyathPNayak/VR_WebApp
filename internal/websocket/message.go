@@ -4,11 +4,11 @@ import (
     "encoding/json"
     "fmt"
     "log"
-    
     "VR-Distributed/internal/crypto"
     "VR-Distributed/internal/media"
     "VR-Distributed/internal/webrtc"
     "VR-Distributed/pkg/types"
+    "VR-Distributed/internal/config"
 )
 
 func HandleJSONMessage(client *Client, data []byte, room *Room) error {
@@ -85,8 +85,9 @@ func handleAESKeyExchange(client *Client, msg types.Message) error {
 
 func handleStartStream(client *Client, msg types.Message) error {
     mediaFile := msg.Data
+    configStruct := config.Load()
     if mediaFile == "" {
-        mediaFile = "media/sample.mp4"
+        mediaFile = configStruct.DefaultFilePath // change it to whatever you want
     }
     
     go func() {
@@ -160,7 +161,8 @@ func handleGyroData(client *Client, msg types.Message) error {
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
     switch msgType {
     case "start_vr":
-        go media.StartStreaming(client, "./media/media.mp4")
+        configStruct := config.Load()
+        go media.StartStreaming(client, configStruct.DefaultFilePath)
         client.SendMessage(types.Message{
             Type:    "vr_ready",
             Message: "VR process started",

@@ -9,14 +9,16 @@ type Config struct {
     MediaDir      string
     StaticDir     string
     DefaultRoom   string
+    DefaultFilePath string
 }
 
 func Load() *Config {
     return &Config{
-        ServerAddress: getEnv("SERVER_ADDRESS", "0.0.0.0:8080"),
+        ServerAddress: getEnv("SERVER_ADDRESS", "0.0.0.0:8000"),
         MediaDir:      getEnv("MEDIA_DIR", "media"),
         StaticDir:     getEnv("STATIC_DIR", "static"),
         DefaultRoom:   getEnv("DEFAULT_ROOM", "default"),
+        DefaultFilePath: getEnv("filePath", "cpp_src/x64/Debug/VRenv(raylib).exe"),
     }
 }
 
