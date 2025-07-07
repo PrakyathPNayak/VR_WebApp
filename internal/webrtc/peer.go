@@ -48,11 +48,16 @@ func SetupPeerConnection(client PeerInterface) error {
     client.SetVideoTrack(videoTrack)
     
     // Create audio track
-    audioTrack, err := webrtc.NewTrackLocalStaticSample(
-        webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+    audioTrack, _ := webrtc.NewTrackLocalStaticSample(
+        webrtc.RTPCodecCapability{
+            MimeType:  webrtc.MimeTypeOpus, 
+            ClockRate: 48000,               
+            Channels:  2,                   
+        },
         "audio",
         "stream",
     )
+
     if err != nil {
         return fmt.Errorf("failed to create audio track: %w", err)
     }
@@ -64,6 +69,7 @@ func SetupPeerConnection(client PeerInterface) error {
     }
     
     if _, err = peerConnection.AddTrack(audioTrack); err != nil {
+        log.Println("Failed to add audio track")
         return fmt.Errorf("failed to add audio track: %w", err)
     }
     

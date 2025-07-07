@@ -221,6 +221,7 @@ class WebSocketManager {
 
   disconnect() {
     this.sendControl("terminate");
+    console.log("disconnected");
     // Don't close socket immediately to allow cleanup message
   }
 

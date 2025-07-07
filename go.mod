@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/aler9/gortsplib v1.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.4.0 // indirect
 	github.com/pion/datachannel v1.5.5 // indirect

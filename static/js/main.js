@@ -52,7 +52,12 @@ class VRStreamApp {
     console.log("Shutting down VR Stream Application...");
 
     try {
-      // Disconnect WebRTC connections
+      // Disconnect gyro event listener
+      if (window.gyroManager) {
+        window.gyroManager.disableGyro();
+      }
+
+      // Disconnect WebRTC
       if (window.webrtcManager) {
         window.webrtcManager.disconnect();
       }

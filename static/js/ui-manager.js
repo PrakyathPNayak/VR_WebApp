@@ -7,6 +7,7 @@ class UIManager {
     this.elements = {
       status: document.getElementById("status"),
       videoElement: document.getElementById("videoElement"),
+      audioElement: document.getElementById("audioElement"),
       qualitySlider: document.getElementById("quality"),
       qualityValue: document.getElementById("qualityValue"),
       startVrBtn: document.getElementById("startVrBtn"),
@@ -53,6 +54,9 @@ class UIManager {
     this.elements.disconnectBtn.onclick = () => {
       if (window.webrtcManager) {
         window.webrtcManager.disconnect();
+      }
+      if (window.gyroManager) {
+        window.gyroManager.disableGyro();
       }
       if (window.websocketManager) {
         window.websocketManager.disconnect();

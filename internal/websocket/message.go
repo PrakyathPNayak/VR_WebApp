@@ -21,7 +21,7 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
     case "aes_key_exchange":
         return handleAESKeyExchange(client, msg)
 
-    case "start_stream":
+    case "start_vr":
         return handleStartStream(client, msg)
 
     case "stop_stream":

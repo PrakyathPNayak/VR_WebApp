@@ -8,6 +8,7 @@ class WebRTCManager {
     this.localStream = null;
     this.myPeerId = null;
     this.videoElement = document.getElementById("videoElement");
+    this.audioElement = document.getElementById("audioElement");
   }
 
   async createPeerConnection(peerId) {
@@ -35,6 +36,8 @@ class WebRTCManager {
       });
     }
 
+    pc.addTransceiver("audio", { direction: "recvonly" });
+
     // Set maxBitrate for video sender (if sending video)
     pc.addEventListener("track", () => {
       setTimeout(() => {
@@ -50,7 +53,8 @@ class WebRTCManager {
       }, 0);
     });
 
-    setInterval(() => {
+    // Was used for debugging the WebRTC connection
+    /*setInterval(() => {
       pc.getStats(null).then((stats) => {
         stats.forEach((report) => {
           if (report.type === "inbound-rtp") {
@@ -58,7 +62,7 @@ class WebRTCManager {
           }
         });
       });
-    }, 1000);
+    }, 1000); */
 
     pc.onicecandidate = (event) => {
       if (event.candidate && event.candidate.candidate !== "") {
@@ -102,14 +106,46 @@ class WebRTCManager {
 
     pc.ontrack = (event) => {
       console.log("Received remote stream (ontrack event):", event);
-      this.videoElement.srcObject = event.streams[0];
-      this.videoElement.autoplay = true;
-      this.videoElement.play().catch(console.error);
+
+      const stream = event.streams[0];
+      const trackKind = event.track.kind;
+
+      if (trackKind === "video") {
+        if (this.videoElement.srcObject !== stream) {
+          this.videoElement.srcObject = stream;
+          this.videoElement.autoplay = true;
+
+          setTimeout(() => {
+            this.videoElement.play().catch((err) => {
+              if (err.name !== "AbortError") {
+                console.error("Video playback error:", err);
+              }
+            });
+          }, 100);
+        }
+      } else if (trackKind === "audio") {
+        if (this.audioElement.srcObject !== stream) {
+          this.audioElement.srcObject = stream;
+          this.audioElement.autoplay = true;
+
+          setTimeout(() => {
+            this.audioElement.play().catch((err) => {
+              if (err.name !== "AbortError") {
+                console.error("Audio playback error:", err);
+              }
+            });
+          }, 100);
+        }
+      }
+
+      console.log(
+        `Track of kind '${trackKind}' attached to ${
+          trackKind === "video" ? "videoElement" : "audioElement"
+        }`,
+      );
+
       if (window.uiManager) {
-        window.uiManager.updateStatus(
-          "Receiving WebRTC video stream",
-          "webrtc",
-        );
+        window.uiManager.updateStatus("Receiving WebRTC stream", "webrtc");
       }
     };
 
@@ -243,7 +279,7 @@ class WebRTCManager {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
-        audio: false,
+        audio: true,
       };
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch (error) {
@@ -253,6 +289,7 @@ class WebRTCManager {
 
   disconnect() {
     // Close all peer connections
+    console.log("Closing all connections to WebRTC");
     this.peers.forEach((peer) => {
       if (peer.pc) {
         peer.pc.close();
