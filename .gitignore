@@ -3,3 +3,9 @@
 *.mp4
 *.env
 */media*
+*vendor/*
+.log
+.dat
+.tlog
+*.vs 
+.vs/

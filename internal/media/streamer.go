@@ -70,7 +70,8 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 			defer func() {
 				client.SetStreaming(false)
 			}()
-			// remove this if you want to stream video and audio separately
+			// remove this if you want to stream video and audio separately. 
+			// Instead, call both audio and video adders one by one
 			if err := StartStreamingFromVR(client, filePath, "default"); err != nil {
 				client.SendError(fmt.Sprintf("Failed to stream VR: %v", err))
 			}
@@ -105,7 +106,6 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 		go func() {
 			defer func() {
 				client.SetStreaming(false)			}()
-			// remove this if you want to stream video and audio separately
 			if err := StreamAudioFile(client, filePath); err != nil {
 				client.SendError(fmt.Sprintf("Failed to stream audio: %v", err))
 			}
@@ -142,7 +142,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 			client.SendError(fmt.Sprintf("Failed to start VR process: %v", err))
 			return
 		}
-		defer vr.Cmd.Process.Kill() // Clean up
+		defer vr.Cmd.Process.Kill()
 
 		if err := StreamVRVideo(client, vr); err != nil {
 			client.SendError(fmt.Sprintf("VR streaming error: %v", err))
@@ -169,8 +169,6 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 	}
 
 	log.Printf("[VRProcess] Started process: %s", exePath)
-
-	// Optional: Log stderr to debug issues
 	go func() {
 		buf := make([]byte, 1024)
 		for {
