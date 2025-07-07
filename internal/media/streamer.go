@@ -17,12 +17,30 @@ const (
 	headerSize  = 24         // Change if you use more fields
 )
 
+// Match 6 uint32s = 24 bytes
 type FrameHeader struct {
-    TimestampMS uint64
-    Width       uint16
-    Height      uint16
-    FrameSize   uint32
+	Magic        uint32
+	TimestampMS  uint32
+	FrameSize    uint32
+	Width        uint32
+	Height       uint32
+	PixelFormat  uint32
 }
+
+func parseHeader(data []byte) (*FrameHeader, error) {
+	if len(data) < 24 {
+		return nil, fmt.Errorf("invalid header length")
+	}
+	return &FrameHeader{
+		Magic:       binary.LittleEndian.Uint32(data[0:4]),
+		TimestampMS: binary.LittleEndian.Uint32(data[4:8]),
+		FrameSize:   binary.LittleEndian.Uint32(data[8:12]),
+		Width:       binary.LittleEndian.Uint32(data[12:16]),
+		Height:      binary.LittleEndian.Uint32(data[16:20]),
+		PixelFormat: binary.LittleEndian.Uint32(data[20:24]),
+	}, nil
+}
+
 
 type StreamerInterface interface {
 	IsStreaming() bool
@@ -54,7 +72,6 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 			}()
 			// remove this if you want to stream video and audio separately
 			if err := StartStreamingFromVR(client, filePath, "default"); err != nil {
-				log.Printf("Error streaming VR: %v", err)
 				client.SendError(fmt.Sprintf("Failed to stream VR: %v", err))
 			}
 		}()
@@ -66,7 +83,6 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 				client.SetStreaming(false)
 			}()
 			if err := StreamVideoWithAudio(client, filePath); err != nil {
-				log.Printf("Error streaming video or audio: %v", err)
 				client.SendError(fmt.Sprintf("Failed to stream video or audio: %v", err))
 			}
 		}()
@@ -91,7 +107,6 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 				client.SetStreaming(false)			}()
 			// remove this if you want to stream video and audio separately
 			if err := StreamAudioFile(client, filePath); err != nil {
-				log.Printf("Error streaming audio: %v", err)
 				client.SendError(fmt.Sprintf("Failed to stream audio: %v", err))
 			}
 		}()
@@ -126,14 +141,12 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 
 		vr, err := StartVRProcess(exePath, room)
 		if err != nil {
-			log.Printf("Failed to start VR process: %v", err)
 			client.SendError(fmt.Sprintf("Failed to start VR process: %v", err))
 			return
 		}
 		defer vr.Cmd.Process.Kill() // Clean up
 
 		if err := StreamVRVideo(client, vr); err != nil {
-			log.Printf("Error streaming VR video: %v", err)
 			client.SendError(fmt.Sprintf("VR streaming error: %v", err))
 		}
 	}()
@@ -175,117 +188,95 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 }
 
 // FrameHeaderSize must match exactly how many bytes your Python FrameHeader uses
-const FrameHeaderSize = 8 + 2 + 2 + 4 // 16 bytes
 
 var lastTimestamp uint64
 var frameCount int
 var lastLogTime = time.Now()
 
 func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
-    log.Println("Starting stream from VR process")
-    r := vr.Stdout
-    
-    // Frame header structure: 8 bytes timestamp + 2 bytes width + 2 bytes height + 4 bytes frame size = 16 bytes
-    const frameHeaderSize = 24
-    
-    // Pre-allocate buffers to avoid repeated allocations
-    headerBuf := make([]byte, frameHeaderSize)
-    var frameBuf []byte
-    var rgbFrame []byte
-    
-    // FPS tracking variables
-    var frameCount int
-    lastLogTime := time.Now()
-    var lastTimestamp uint64
-    
-    client.SetStreaming(true)
-    log.Println("Streaming started")
-    
-    for client.IsStreaming() {
-        // Read frame header
-        _, err := io.ReadFull(r, headerBuf)
-        if err != nil {
-            if err == io.EOF {
-                log.Println("Stream ended (EOF)")
-                break
-            }
-            return fmt.Errorf("error reading header: %w", err)
-        }
-        
-        // Parse header inline for better performance
-        timestampMS := binary.LittleEndian.Uint64(headerBuf[0:8])
-        width := binary.LittleEndian.Uint16(headerBuf[8:10])
-        height := binary.LittleEndian.Uint16(headerBuf[10:12])
-        frameSize := binary.LittleEndian.Uint32(headerBuf[12:16])
-        
-        // Skip empty or duplicate frames
-        if frameSize == 0 || timestampMS == lastTimestamp {
-            if frameSize > 0 {
-                // Still need to read and discard duplicate frame data
-                if cap(frameBuf) < int(frameSize) {
-                    frameBuf = make([]byte, frameSize)
-                } else {
-                    frameBuf = frameBuf[:frameSize]
-                }
-                _, err = io.ReadFull(r, frameBuf)
-                if err != nil {
-                    return fmt.Errorf("error reading duplicate frame: %w", err)
-                }
-            }
-            continue
-        }
-        lastTimestamp = timestampMS
-        
-        // Resize frame buffer if needed (avoid reallocation when possible)
-        if cap(frameBuf) < int(frameSize) {
-            frameBuf = make([]byte, frameSize)
-        } else {
-            frameBuf = frameBuf[:frameSize]
-        }
-        
-        // Read frame data
-        _, err = io.ReadFull(r, frameBuf)
-        if err != nil {
-            return fmt.Errorf("error reading frame: %w", err)
-        }
-        
-        // Convert RGBA to RGB efficiently
-        rgbSize := int(width) * int(height) * 3
-        if cap(rgbFrame) < rgbSize {
-            rgbFrame = make([]byte, rgbSize)
-        } else {
-            rgbFrame = rgbFrame[:rgbSize]
-        }
-        
-        // Efficient RGBA to RGB conversion
-        rgbIdx := 0
-        for i := 0; i < len(frameBuf); i += 4 {
-            rgbFrame[rgbIdx] = frameBuf[i]     // R
-            rgbFrame[rgbIdx+1] = frameBuf[i+1] // G  
-            rgbFrame[rgbIdx+2] = frameBuf[i+2] // B
-            rgbIdx += 3
-        }
-        
-        // Write raw frame to WebRTC
-        err = webrtc.WriteVideoSample(client, rgbFrame)
-        if err != nil {
-            return fmt.Errorf("WebRTC write failed: %w", err)
-        }
-        
-        // FPS logging (optimized)
-        frameCount++
-        now := time.Now()
-        if now.Sub(lastLogTime) >= time.Second {
-            fps := float64(frameCount) / now.Sub(lastLogTime).Seconds()
-            log.Printf("Pipe FPS: %.2f", fps)
-            frameCount = 0
-            lastLogTime = now
-        }
-    }
-    
-    log.Println("Stream ended")
-    return nil
+	log.Println("Starting stream from VR process")
+
+	r := vr.Stdout
+	headerBuf := make([]byte, headerSize)
+
+	var lastTimestamp uint32
+	client.SetStreaming(true)
+	var frameCount int
+	lastLogTime := time.Now()
+	
+	for client.IsStreaming() {
+		_, err := io.ReadFull(r, headerBuf)
+		if err != nil {
+			if err == io.EOF {
+				log.Println("Stream ended (EOF)")
+				break
+			}
+			return fmt.Errorf("error reading header: %w", err)
+		}
+
+		header := FrameHeader{
+			Magic:       binary.LittleEndian.Uint32(headerBuf[0:4]),
+			TimestampMS: binary.LittleEndian.Uint32(headerBuf[4:8]),
+			FrameSize:   binary.LittleEndian.Uint32(headerBuf[8:12]),
+			Width:       binary.LittleEndian.Uint32(headerBuf[12:16]),
+			Height:      binary.LittleEndian.Uint32(headerBuf[16:20]),
+			PixelFormat: binary.LittleEndian.Uint32(headerBuf[20:24]),
+		}
+
+		if header.Magic != magicNumber {
+			log.Printf("Invalid magic number: %x", header.Magic)
+			continue
+		}
+
+		if header.FrameSize == 0 {
+			log.Println("Skipping empty frame")
+			continue
+		}
+
+		// Avoid duplicate timestamps
+		if header.TimestampMS == lastTimestamp {
+			log.Println("Skipping duplicate frame")
+			// Consume the frame but skip sending it
+			_, err = io.CopyN(io.Discard, r, int64(header.FrameSize))
+			if err != nil {
+				return fmt.Errorf("error skipping duplicate frame: %w", err)
+			}
+			continue
+		}
+
+		frameBuf := make([]byte, header.FrameSize)
+		_, err = io.ReadFull(r, frameBuf)
+		if err != nil {
+			return fmt.Errorf("error reading frame data: %w", err)
+		}
+		currentTimestamp := header.TimestampMS
+		duration := currentTimestamp - lastTimestamp
+		lastTimestamp = currentTimestamp
+
+		if header.PixelFormat == 2 {
+			// Pass H.264 data directly to WebRTC
+			err = webrtc.WriteVideoSample(client, frameBuf, duration)
+			if err != nil {
+				return fmt.Errorf("WebRTC write failed: %w", err)
+			}
+		} else {
+			log.Printf("Unsupported pixel format: %d", header.PixelFormat)
+		}
+		// FPS Logging
+		frameCount++
+		now := time.Now()
+		if now.Sub(lastLogTime) >= time.Second {
+			fps := 1000/duration
+			log.Printf("Pipe FPS: %d", fps)
+			frameCount = 0
+			lastLogTime = now
+		}
+	}
+
+	log.Println("Stream ended")
+	return nil
 }
+
 
 // findAnnexBStartCode returns the index of the first Annex-B start code (0x000001 or 0x00000001) in buf, or -1 if not found.
 func findAnnexBStartCode(buf []byte) int {
@@ -408,7 +399,7 @@ func StreamVideoFile(client StreamerInterface, mediaFile string) error {
 			}
 			nalu := buf[start : start+3+next]
 			if len(nalu) > 3 {
-				err := webrtc.WriteVideoSample(client, nalu)
+				err := webrtc.WriteVideoSample(client, nalu, 10)
 				if err != nil {
 					return err
 				}

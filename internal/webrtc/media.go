@@ -18,7 +18,7 @@ type MediaInterface interface {
     GetStreamingMutex() *sync.RWMutex
 }
 
-func WriteVideoSample(client MediaInterface, data []byte) error {
+func WriteVideoSample(client MediaInterface, data []byte, duration uint32) error {
     if !client.IsStreaming() {
         return nil
     }
@@ -26,10 +26,9 @@ func WriteVideoSample(client MediaInterface, data []byte) error {
     if videoTrack == nil {
         return fmt.Errorf("video track not available")
     }
-    log.Printf("Writing video track")
     sample := media.Sample{
         Data:     data,
-        Duration: 33 * time.Millisecond, // ~30 FPS
+        Duration: time.Duration(duration) * time.Millisecond, // ~100 FPS
     }
     
     if err := videoTrack.WriteSample(sample); err != nil {

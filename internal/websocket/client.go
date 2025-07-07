@@ -4,7 +4,6 @@ import (
     "sync"
     "time"
     "fmt"
-    "log"
     "github.com/gorilla/websocket"
     "github.com/pion/webrtc/v3"
     "VR-Distributed/internal/crypto"
@@ -103,7 +102,6 @@ func (c *Client) SetAudioTrack(track *webrtc.TrackLocalStaticSample) {
 
 func (c *Client) IsStreaming() bool {
     c.streamingMutex.RLock()
-    log.Println("check streaming")
     defer c.streamingMutex.RUnlock()
     return c.isStreaming
 }
@@ -112,7 +110,6 @@ func (c *Client) SetStreaming(streaming bool) {
     c.streamingMutex.Lock()
     defer c.streamingMutex.Unlock()
     c.isStreaming = streaming
-    log.Println("Set streaming")
 }
 
 func (c *Client) GetStreamingMutex() *sync.RWMutex {
