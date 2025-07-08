@@ -125,18 +125,24 @@ func StopStreaming(client StreamerInterface) {
 	client.SetStreaming(false)
 }
 
-func WriteStdinGyroData(json []byte) error {
+func WriteStdinGyroData(json []byte, isrunning bool) error {
 	if gyro_stdin == nil {
 		return fmt.Errorf("gyro_stdin is not initialized")
 	}
+	json = append(json, '\n') // Ensure newline for proper parsing
 	_, err := gyro_stdin.Write(json)
 	if err != nil {
+		log.Printf("Failed to write gyro data to stdin: %v", err)
 		return fmt.Errorf("failed to write gyro data to stdin: %w", err)
 	}
-	// Ensure the data is flushed to the VR process
-	if err := gyro_stdin.Close(); err != nil {
-		return fmt.Errorf("failed to close gyro_stdin: %w", err)
-	}
+	//log.Printf("Wrote gyro data to stdin: %s", json)
+	// if !isrunning {
+	// 	log.Println("Gyro data writing is not running, closing gyro_stdin")
+	// 	// Ensure the data is flushed to the VR process
+	// 	if err := gyro_stdin.Close(); err != nil {
+	// 		return fmt.Errorf("failed to close gyro_stdin: %w", err)
+	// 	}
+	// }
 	return nil
 }
 

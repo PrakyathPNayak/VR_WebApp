@@ -58,7 +58,7 @@ func (s *SharedMemoryWriter) WriteJSON(obj interface{}) error {
 	return nil
 }
 
-func (s *SharedMemoryWriter) WriteStdin(obj interface{}) error {
+func (s *SharedMemoryWriter) WriteStdin(obj interface{}, isrunning bool) error {
 	jsonData, err := json.Marshal(obj)
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func (s *SharedMemoryWriter) WriteStdin(obj interface{}) error {
 	if len(jsonData) >= s.size {
 		return os.ErrInvalid
 	}
-	media.WriteStdinGyroData(jsonData)
+	media.WriteStdinGyroData(jsonData, isrunning)
 	s.data[len(jsonData)] = 0 // null-terminate
 	return nil
 }

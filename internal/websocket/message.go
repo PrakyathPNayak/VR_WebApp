@@ -13,6 +13,7 @@ import (
 )
 
 var gyroWriter *SharedMemoryWriter
+var isrunning bool = false
 
 func InitGyroWriter() error {
 	var err error
@@ -117,7 +118,8 @@ func handleStartStream(client *Client, msg types.Message) error {
 
 func handleStopStream(client *Client) error {
 	media.StopStreaming(client)
-
+	isrunning = false
+	log.Println("Stream stopped for client:", client.GetPeerID(), "isrunning:", isrunning)
 	return client.SendMessage(types.Message{
 		Type:    "stream_stopped",
 		Message: "Stream stopped",
@@ -135,6 +137,8 @@ func handleWebRTCAnswer(client *Client, msg types.Message, room *Room) error {
 	if msg.Target != "" && msg.Target != client.GetPeerID() {
 		return room.ForwardMessage(msg, msg.Target)
 	}
+	isrunning = true
+	log.Println("Stream started for client:", client.GetPeerID(), "isrunning:", isrunning)
 	return webrtc.HandleAnswer(client, msg)
 }
 
@@ -171,9 +175,9 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"gamma":     msg.Gamma,
 		"timestamp": time.Now().UnixMilli(),
 	}
-
-	if err := gyroWriter.WriteStdin(data); err != nil {
-		log.Println("Error writing gyro data to shared memory:", err)
+	//log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
+	if err := gyroWriter.WriteStdin(data, isrunning); err != nil {
+		log.Println("Error writing gyro data to Stdin:", err)
 	}
 
 	return nil
