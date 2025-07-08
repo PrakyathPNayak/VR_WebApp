@@ -230,7 +230,7 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 		}
 
 		// Avoid duplicate timestamps
-		if header.TimestampMS == lastTimestamp {
+		/*if header.TimestampMS == lastTimestamp {
 			log.Println("Skipping duplicate frame")
 			// Consume the frame but skip sending it
 			_, err = io.CopyN(io.Discard, r, int64(header.FrameSize))
@@ -238,7 +238,7 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 				return fmt.Errorf("error skipping duplicate frame: %w", err)
 			}
 			continue
-		}
+		}*/
 
 		frameBuf := make([]byte, header.FrameSize)
 		_, err = io.ReadFull(r, frameBuf)
@@ -246,9 +246,8 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 			return fmt.Errorf("error reading frame data: %w", err)
 		}
 		currentTimestamp := header.TimestampMS
-		duration := currentTimestamp - lastTimestamp
+		duration := max(currentTimestamp - lastTimestamp, 7) // sets the fps to whatever 1000/7 is
 		lastTimestamp = currentTimestamp
-
 		if header.PixelFormat == 2 {
 			// Pass H.264 data directly to WebRTC
 			err = webrtc.WriteVideoSample(client, frameBuf, duration)
@@ -260,8 +259,8 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 		}
 		// FPS Logging
 		frameCount++
-		now := time.Now()
-		if now.Sub(lastLogTime) >= time.Second {
+		now := time.Now()	
+		if now.Sub(lastLogTime) >= time.Second && duration > 0{
 			fps := 1000/duration
 			log.Printf("Pipe FPS: %d", fps)
 			frameCount = 0
