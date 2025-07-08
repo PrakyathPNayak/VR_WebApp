@@ -4,8 +4,11 @@
 *.env
 */media*
 *vendor/*
-.log
-.dat
-.tlog
+*.log
+*.dat
+*.tlog
 *.vs 
 .vs/
+cpp_src/
+Shared/
+*.sum
