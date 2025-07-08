@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-    "time"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 const (
@@ -17,14 +17,16 @@ const (
 	headerSize  = 24         // Change if you use more fields
 )
 
+var gyro_stdin io.WriteCloser
+
 // Match 6 uint32s = 24 bytes
 type FrameHeader struct {
-	Magic        uint32
-	TimestampMS  uint32
-	FrameSize    uint32
-	Width        uint32
-	Height       uint32
-	PixelFormat  uint32
+	Magic       uint32
+	TimestampMS uint32
+	FrameSize   uint32
+	Width       uint32
+	Height      uint32
+	PixelFormat uint32
 }
 
 func parseHeader(data []byte) (*FrameHeader, error) {
@@ -40,7 +42,6 @@ func parseHeader(data []byte) (*FrameHeader, error) {
 		PixelFormat: binary.LittleEndian.Uint32(data[20:24]),
 	}, nil
 }
-
 
 type StreamerInterface interface {
 	IsStreaming() bool
@@ -70,7 +71,7 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 			defer func() {
 				client.SetStreaming(false)
 			}()
-			// remove this if you want to stream video and audio separately. 
+			// remove this if you want to stream video and audio separately.
 			// Instead, call both audio and video adders one by one
 			if err := StartStreamingFromVR(client, filePath, "default"); err != nil {
 				client.SendError(fmt.Sprintf("Failed to stream VR: %v", err))
@@ -105,7 +106,8 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 		// Start audio streaming
 		go func() {
 			defer func() {
-				client.SetStreaming(false)			}()
+				client.SetStreaming(false)
+			}()
 			if err := StreamAudioFile(client, filePath); err != nil {
 				client.SendError(fmt.Sprintf("Failed to stream audio: %v", err))
 			}
@@ -121,6 +123,21 @@ func StopStreaming(client StreamerInterface) {
 	defer mutex.Unlock()
 
 	client.SetStreaming(false)
+}
+
+func WriteStdinGyroData(json []byte) error {
+	if gyro_stdin == nil {
+		return fmt.Errorf("gyro_stdin is not initialized")
+	}
+	_, err := gyro_stdin.Write(json)
+	if err != nil {
+		return fmt.Errorf("failed to write gyro data to stdin: %w", err)
+	}
+	// Ensure the data is flushed to the VR process
+	if err := gyro_stdin.Close(); err != nil {
+		return fmt.Errorf("failed to close gyro_stdin: %w", err)
+	}
+	return nil
 }
 
 func StartStreamingFromVR(client StreamerInterface, exePath, room string) error {
@@ -154,7 +171,11 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 
 func StartVRProcess(exePath, room string) (*VRProcess, error) {
 	cmd := exec.Command(exePath, "--webrtc", "--room", room)
-
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	gyro_stdin = stdin // Store the stdin for gyro data
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -163,7 +184,6 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -199,7 +219,7 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	client.SetStreaming(true)
 	var frameCount int
 	lastLogTime := time.Now()
-	
+
 	for client.IsStreaming() {
 		_, err := io.ReadFull(r, headerBuf)
 		if err != nil {
@@ -246,7 +266,7 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 			return fmt.Errorf("error reading frame data: %w", err)
 		}
 		currentTimestamp := header.TimestampMS
-		duration := max(currentTimestamp - lastTimestamp, 7) // sets the fps to whatever 1000/7 is
+		duration := max(currentTimestamp-lastTimestamp, 7) // sets the fps to whatever 1000/7 is
 		lastTimestamp = currentTimestamp
 		if header.PixelFormat == 2 {
 			// Pass H.264 data directly to WebRTC
@@ -259,9 +279,9 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 		}
 		// FPS Logging
 		frameCount++
-		now := time.Now()	
-		if now.Sub(lastLogTime) >= time.Second && duration > 0{
-			fps := 1000/duration
+		now := time.Now()
+		if now.Sub(lastLogTime) >= time.Second && duration > 0 {
+			fps := 1000 / duration
 			log.Printf("Pipe FPS: %d", fps)
 			frameCount = 0
 			lastLogTime = now
@@ -270,7 +290,6 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	log.Println("Stream ended")
 	return nil
 }
-
 
 // findAnnexBStartCode returns the index of the first Annex-B start code (0x000001 or 0x00000001) in buf, or -1 if not found.
 func findAnnexBStartCode(buf []byte) int {

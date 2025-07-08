@@ -1,7 +1,3 @@
-github.com/3d0c/gmf v0.0.0-20220906170454-be727bc5b56c h1:8i+Ctl/XBV/MINPveOAMGjJO2XiObXmYe/j4vAEL+3s=
-github.com/3d0c/gmf v0.0.0-20220906170454-be727bc5b56c/go.mod h1:PqcBsVCdnbbM6CMlSSPQMtmUyMfxF+Zjddh957qOzMw=
-github.com/aler9/gortsplib v1.0.1 h1:R13+hxlvg2Hvu98+0hzg0o5fPjyUA9ZPJneMIBxKGXk=
-github.com/aler9/gortsplib v1.0.1/go.mod h1:BOWNZ/QBkY/eVcRqUzJbPFEsRJshwxaxBT01K260Jeo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
