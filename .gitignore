@@ -1,5 +1,4 @@
 *.pem
-*.exe
 *.mp4
 *.env
 */media*
@@ -9,6 +8,7 @@
 *.tlog
 *.vs 
 .vs/
-cpp_src/
 Shared/
 *.sum
+*.pdb
+main.exe
