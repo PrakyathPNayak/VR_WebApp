@@ -6,20 +6,15 @@ import (
 	"VR-Distributed/internal/media"
 	"VR-Distributed/internal/webrtc"
 	"VR-Distributed/pkg/types"
+	"VR-Distributed/internal/shared"
 	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 )
 
-var gyroWriter *SharedMemoryWriter
+var gyroWriter = &shared.SharedMemoryWriter{}
 var isrunning bool = false
-
-func InitGyroWriter() error {
-	var err error
-	gyroWriter, err = NewSharedMemoryWriter("gyro.dat", 65536)
-	return err
-}
 
 func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	var msg types.Message
@@ -88,11 +83,14 @@ func handleAESKeyExchange(client *Client, msg types.Message) error {
 	if err := client.SetupAESCipher(key); err != nil {
 		return err
 	}
+	
+	err = gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
 
-	ack := types.Message{Type: "key_exchange_complete"}
-	if err := InitGyroWriter(); err != nil {
+	if err != nil {
 		log.Fatal("Failed to initialize gyro shared memory:", err)
+		return err
 	}
+	ack := types.Message{Type: "key_exchange_complete"}
 	return client.SendMessage(ack)
 }
 

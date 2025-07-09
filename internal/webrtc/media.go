@@ -28,7 +28,7 @@ func WriteVideoSample(client MediaInterface, data []byte, duration uint32) error
     }
     sample := media.Sample{
         Data:     data,
-        Duration: time.Duration(duration) * time.Millisecond, // ~100 FPS
+        Duration: time.Duration(duration) * time.Millisecond, 
     }
     
     if err := videoTrack.WriteSample(sample); err != nil {
