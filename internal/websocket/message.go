@@ -4,9 +4,9 @@ import (
 	"VR-Distributed/internal/config"
 	"VR-Distributed/internal/crypto"
 	"VR-Distributed/internal/media"
+	"VR-Distributed/internal/shared"
 	"VR-Distributed/internal/webrtc"
 	"VR-Distributed/pkg/types"
-	"VR-Distributed/internal/shared"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -83,7 +83,7 @@ func handleAESKeyExchange(client *Client, msg types.Message) error {
 	if err := client.SetupAESCipher(key); err != nil {
 		return err
 	}
-	
+
 	err = gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
 
 	if err != nil {
@@ -174,7 +174,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"timestamp": time.Now().UnixMilli(),
 	}
 	//log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
-	if err := gyroWriter.WriteStdin(data, isrunning); err != nil {
+	if err := gyroWriter.WriteStdin(data, isrunning, 0); err != nil {
 		log.Println("Error writing gyro data to Stdin:", err)
 	}
 

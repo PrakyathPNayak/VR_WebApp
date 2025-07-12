@@ -1,8 +1,8 @@
 package media
 
 import (
-	"VR-Distributed/internal/webrtc"
 	"VR-Distributed/internal/shared"
+	"VR-Distributed/internal/webrtc"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -137,7 +137,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 		defer func() {
 			client.SetStreaming(false)
 		}()
-
+		//start VR process
 		vr, err := StartVRProcess(exePath, room)
 		if err != nil {
 			client.SendError(fmt.Sprintf("Failed to start VR process: %v", err))
@@ -149,10 +149,49 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 			client.SendError(fmt.Sprintf("VR streaming error: %v", err))
 		}
 	}()
+	go func() {
+		log.Println("Starting Mediapipe process")
+		//start mediapipe process
+		mediapipe, err := StartMediapipeProcess(room)
+		if err != nil {
+			client.SendError(fmt.Sprintf("Failed to start Mediapipe process: %v", err))
+			log.Printf("Failed to start Mediapipe process: %v", err)
+			return
+		}
+		defer mediapipe.Cmd.Process.Kill()
+	}()
 
 	return nil
 }
+func StartMediapipeProcess(room string) (*VRProcess, error) {
+	//mediapipe exec
+	mediapipe := exec.Command(".venv/Scripts/python.exe", "execs/Mediapipe.py", "--room", room)
+	stdoutm, errm := mediapipe.StdoutPipe()
+	if errm != nil {
+		return nil, errm
+	}
+	if errm := mediapipe.Start(); errm != nil {
+		return nil, errm
+	}
+	stderrm, err := mediapipe.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[MediapipeProcess] Started process: %s", mediapipe.Path)
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdoutm.Read(buf)
+			if err != nil {
+				break
+			}
+			log.Printf("[MediapipeProcess STDOUT] %s", string(buf[:n]))
+		}
+	}()
 
+	return &VRProcess{Cmd: mediapipe, Stdout: stdoutm, Stderr: stderrm}, nil
+
+}
 func StartVRProcess(exePath, room string) (*VRProcess, error) {
 	cmd := exec.Command(exePath, "--webrtc", "--room", room)
 	stdin, err := cmd.StdinPipe()
@@ -171,7 +210,6 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-
 	log.Printf("[VRProcess] Started process: %s", exePath)
 	go func() {
 		buf := make([]byte, 1024)
@@ -189,9 +227,9 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 
 // FrameHeaderSize must match exactly how many bytes your Python FrameHeader uses
 
-var lastTimestamp uint64
-var frameCount int
-var lastLogTime = time.Now()
+// var lastTimestamp uint64
+// var frameCount int
+// var lastLogTime = time.Now()
 
 func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	log.Println("Starting stream from VR process")

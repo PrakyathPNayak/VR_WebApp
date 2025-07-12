@@ -12,3 +12,4 @@ Shared/
 *.sum
 *.pdb
 main.exe
+.venv/
