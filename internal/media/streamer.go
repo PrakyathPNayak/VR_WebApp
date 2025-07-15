@@ -149,49 +149,50 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 			client.SendError(fmt.Sprintf("VR streaming error: %v", err))
 		}
 	}()
-	go func() {
-		log.Println("Starting Mediapipe process")
-		//start mediapipe process
-		mediapipe, err := StartMediapipeProcess(room)
-		if err != nil {
-			client.SendError(fmt.Sprintf("Failed to start Mediapipe process: %v", err))
-			log.Printf("Failed to start Mediapipe process: %v", err)
-			return
-		}
-		defer mediapipe.Cmd.Process.Kill()
-	}()
+	// go func() {
+	// 	log.Println("Starting Mediapipe process")
+	// 	//start mediapipe process
+	// 	mediapipe, err := StartMediapipeProcess(room)
+	// 	if err != nil {
+	// 		client.SendError(fmt.Sprintf("Failed to start Mediapipe process: %v", err))
+	// 		log.Printf("Failed to start Mediapipe process: %v", err)
+	// 		return
+	// 	}
+	// 	defer mediapipe.Cmd.Process.Kill()
+	// }()
 
 	return nil
 }
-func StartMediapipeProcess(room string) (*VRProcess, error) {
-	//mediapipe exec
-	mediapipe := exec.Command(".venv/Scripts/python.exe", "execs/Mediapipe.py", "--room", room)
-	stdoutm, errm := mediapipe.StdoutPipe()
-	if errm != nil {
-		return nil, errm
-	}
-	if errm := mediapipe.Start(); errm != nil {
-		return nil, errm
-	}
-	stderrm, err := mediapipe.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("[MediapipeProcess] Started process: %s", mediapipe.Path)
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			n, err := stdoutm.Read(buf)
-			if err != nil {
-				break
-			}
-			log.Printf("[MediapipeProcess STDOUT] %s", string(buf[:n]))
-		}
-	}()
 
-	return &VRProcess{Cmd: mediapipe, Stdout: stdoutm, Stderr: stderrm}, nil
+// func StartMediapipeProcess(room string) (*VRProcess, error) {
+// 	//mediapipe exec
+// 	mediapipe := exec.Command(".venv/Scripts/python.exe", "execs/Mediapipe.py", "--room", room)
+// 	stdoutm, errm := mediapipe.StdoutPipe()
+// 	if errm != nil {
+// 		return nil, errm
+// 	}
+// 	if errm := mediapipe.Start(); errm != nil {
+// 		return nil, errm
+// 	}
+// 	stderrm, err := mediapipe.StderrPipe()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	log.Printf("[MediapipeProcess] Started process: %s", mediapipe.Path)
+// 	go func() {
+// 		buf := make([]byte, 1024)
+// 		for {
+// 			n, err := stdoutm.Read(buf)
+// 			if err != nil {
+// 				break
+// 			}
+// 			log.Printf("[MediapipeProcess STDOUT] %s", string(buf[:n]))
+// 		}
+// 	}()
 
-}
+// 	return &VRProcess{Cmd: mediapipe, Stdout: stdoutm, Stderr: stderrm}, nil
+
+// }
 func StartVRProcess(exePath, room string) (*VRProcess, error) {
 	cmd := exec.Command(exePath, "--webrtc", "--room", room)
 	stdin, err := cmd.StdinPipe()

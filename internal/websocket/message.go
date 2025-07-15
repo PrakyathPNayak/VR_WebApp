@@ -174,7 +174,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"timestamp": time.Now().UnixMilli(),
 	}
 	//log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
-	if err := gyroWriter.WriteStdin(data, isrunning, 0); err != nil {
+	if err := gyroWriter.WriteStdin(data, isrunning); err != nil {
 		log.Println("Error writing gyro data to Stdin:", err)
 	}
 
