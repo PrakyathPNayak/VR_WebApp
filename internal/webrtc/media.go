@@ -43,7 +43,7 @@ func WriteVideoSample(client MediaInterface, data []byte, duration uint32) error
     return nil
 }
 
-func WriteAudioSample(client MediaInterface, data []byte) error {
+func WriteAudioSample(client MediaInterface, data []byte, duration time.Duration) error {
     if !client.IsStreaming() {
         return nil
     }
@@ -55,7 +55,7 @@ func WriteAudioSample(client MediaInterface, data []byte) error {
     
     sample := media.Sample{
         Data:     data,
-        Duration: 20 * time.Millisecond, // 20ms audio frames
+        Duration: duration * time.Millisecond, // 20ms audio frames
     }
     
     if err := audioTrack.WriteSample(sample); err != nil {

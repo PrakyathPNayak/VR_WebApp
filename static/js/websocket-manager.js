@@ -92,6 +92,10 @@ class WebSocketManager {
         break;
 
       case "vr_ready":
+        // Initialize gyroscope/motion tracking
+        if (window.gyroManager) {
+          await window.gyroManager.enableGyro();
+        }
         if (window.uiManager) {
           window.uiManager.updateStatus(
             "VR process started. Establishing WebRTC...",

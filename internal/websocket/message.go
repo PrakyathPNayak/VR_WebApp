@@ -84,12 +84,6 @@ func handleAESKeyExchange(client *Client, msg types.Message) error {
 		return err
 	}
 
-	err = gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
-
-	if err != nil {
-		log.Fatal("Failed to initialize gyro shared memory:", err)
-		return err
-	}
 	ack := types.Message{Type: "key_exchange_complete"}
 	return client.SendMessage(ack)
 }
@@ -173,7 +167,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"gamma":     msg.Gamma,
 		"timestamp": time.Now().UnixMilli(),
 	}
-	//log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
+	// log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
 	if err := gyroWriter.WriteStdin(data, isrunning, 0); err != nil {
 		log.Println("Error writing gyro data to Stdin:", err)
 	}
@@ -184,6 +178,11 @@ func handleGyroData(client *Client, msg types.Message) error {
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
 	switch msgType {
 	case "start_vr":
+		err := gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
+		if err != nil {
+			log.Fatal("Failed to initialize gyro shared memory:", err)
+			return err
+		}
 		configStruct := config.Load()
 		go media.StartStreaming(client, configStruct.DefaultFilePath)
 		client.SendMessage(types.Message{

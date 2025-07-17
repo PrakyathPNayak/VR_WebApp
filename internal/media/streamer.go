@@ -59,6 +59,8 @@ type VRProcess struct {
 	Cmd    *exec.Cmd
 	Stdout io.ReadCloser
 	Stderr io.ReadCloser
+	AudioOut io.ReadCloser
+	AudioErr io.ReadCloser
 }
 
 func StartStreaming(client StreamerInterface, filePath string) error {
@@ -85,6 +87,7 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 	case ".mp4", ".mkv", ".webp": // add more if you want to
 		// Start Video and Audio streaming
 		go func() {
+			log.Println("got to case")
 			defer func() {
 				client.SetStreaming(false)
 			}()
@@ -95,12 +98,10 @@ func StartStreaming(client StreamerInterface, filePath string) error {
 		// Start video streaming
 		/*go func() {
 		    defer func() {
-		        client.GetStreamingMutex().Lock()
 		        client.SetStreaming(false)
-		        client.GetStreamingMutex().Unlock()
 		    }()
 
-		    if err := StreamVideoFile(client, mediaFile); err != nil {
+		    if err := StreamVideoFile(client, filePath); err != nil {
 		        log.Printf("Error streaming video: %v", err)
 		        client.SendError(fmt.Sprintf("Failed to stream video: %v", err))
 		    }
@@ -143,7 +144,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 			client.SetStreaming(false)
 		}()
 		//start VR process
-		vr, err := StartVRProcess(exePath, room)
+		vr, err := StartVRProcess(client, exePath, room)
 		if err != nil {
 			client.SendError(fmt.Sprintf("Failed to start VR process: %v", err))
 			return
@@ -218,34 +219,86 @@ func StartMediapipeProcess(room string) (*VRProcess, error) {
 		}
 	}()
 	go func() {
-		scanner := bufio.NewScanner(stderrm)
-		for scanner.Scan() {
-			log.Printf("[MediapipeProcess STDERR] %s\n", scanner.Text())
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdoutm.Read(buf)
+			if err != nil {
+				break
+			}
+			log.Printf("[MediapipeProcess STDOUT] %s", string(buf[:n]))
 		}
 	}()
 
 	return &VRProcess{Cmd: mediapipe, Stdout: stdoutm, Stderr: stderrm}, nil
 
 }
-func StartVRProcess(exePath, room string) (*VRProcess, error) {
+func StartVRProcess(client StreamerInterface, exePath, room string) (*VRProcess, error) {
 	cmd := exec.Command(exePath, "--webrtc", "--room", room)
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
 	}
+	log.Println("VR stdin pipe created")
 	shared.InitGyroStdin(stdin) // Store the stdin for gyro data
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
+
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, err
 	}
+
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	log.Printf("[VRProcess] Started process: %s", exePath)
+
+	// 🎧 Start FFmpeg audio capture from VAC
+	audioCmd := exec.Command("ffmpeg",
+	    "-f", "dshow",
+	    "-i", "audio=CABLE Output (VB-Audio Virtual Cable)",
+	    "-acodec", "libopus",
+	    "-ar", "48000",
+	    "-ac", "2",
+	    "-frame_duration", "20",  // 20ms frames
+	    "-application", "voip",   // or "audio" for music
+	    "-b:a", "64k",           // bitrate
+	    "-f", "ogg",             // or "opus"
+	    "-nostats",
+	    "-loglevel", "quiet",
+	    "pipe:1",
+	)
+	audioOut, err := audioCmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	audioErr, err := audioCmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := audioCmd.Start(); err != nil {
+		return nil, err
+	}
+
+	log.Println("[AudioCapture] FFmpeg started with VAC input")
+	go func() {
+	    buf := make([]byte, 1024)
+	    for {
+	        n, err := audioErr.Read(buf)
+	        if err != nil {
+	            break
+	        }
+	        log.Printf("[FFmpeg Audio STDERR] %s", string(buf[:n]))
+	    }
+	}()
+
+	// Optional: Log VR process stderr
 	go func() {
 		buf := make([]byte, 1024)
 		for {
@@ -257,7 +310,13 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 		}
 	}()
 
-	return &VRProcess{Cmd: cmd, Stdout: stdout, Stderr: stderr}, nil
+	return &VRProcess{
+		Cmd:      cmd,
+		Stdout:   stdout,
+		Stderr:   stderr,
+		AudioOut: audioOut,
+		AudioErr: audioErr,
+	}, nil
 }
 
 // FrameHeaderSize must match exactly how many bytes your Python FrameHeader uses
@@ -267,13 +326,43 @@ func StartVRProcess(exePath, room string) (*VRProcess, error) {
 // var lastLogTime = time.Now()
 
 func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
-	log.Println("Starting stream from VR process")
+	log.Println("Starting VR video and audio streaming")
 
 	r := vr.Stdout
+	a := vr.AudioOut
 	headerBuf := make([]byte, headerSize)
 
-	var lastTimestamp uint32
 	client.SetStreaming(true)
+
+	// Start audio goroutine
+	go func() {
+		audioBuf := make([]byte, 4096) // Size depends on FFmpeg output
+		for client.IsStreaming() {
+			n, err := a.Read(audioBuf)
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("Error reading audio: %v", err)
+				}
+				// break
+			}
+			if n > 0 {
+				go func(){
+					log.Println(n)
+					err := webrtc.WriteAudioSample(client, audioBuf[:n], 20) // 20 ms default for 48000 Hz stereo
+					if err != nil {
+						log.Printf("Error writing audio: %v", err)
+						// break
+					}
+				}()
+			}
+			if err != nil { 
+				break
+			}
+		}
+		log.Println("Audio stream ended")
+	}()
+
+	// Handle video stream in current goroutine
 	var frameCount int
 	lastLogTime := time.Now()
 
@@ -281,10 +370,10 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 		_, err := io.ReadFull(r, headerBuf)
 		if err != nil {
 			if err == io.EOF {
-				log.Println("Stream ended (EOF)")
+				log.Println("Video stream ended (EOF)")
 				break
 			}
-			return fmt.Errorf("error reading header: %w", err)
+			return fmt.Errorf("error reading video header: %w", err)
 		}
 
 		header := FrameHeader{
@@ -300,34 +389,19 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 			log.Printf("Invalid magic number: %x", header.Magic)
 			continue
 		}
-
 		if header.FrameSize == 0 {
 			log.Println("Skipping empty frame")
 			continue
 		}
-
-		// Avoid duplicate timestamps
-		/*if header.TimestampMS == lastTimestamp {
-			log.Println("Skipping duplicate frame")
-			// Consume the frame but skip sending it
-			_, err = io.CopyN(io.Discard, r, int64(header.FrameSize))
-			if err != nil {
-				return fmt.Errorf("error skipping duplicate frame: %w", err)
-			}
-			continue
-		}*/
 
 		frameBuf := make([]byte, header.FrameSize)
 		_, err = io.ReadFull(r, frameBuf)
 		if err != nil {
 			return fmt.Errorf("error reading frame data: %w", err)
 		}
-		currentTimestamp := header.TimestampMS
-		duration := max(currentTimestamp-lastTimestamp, 7) // sets the fps to whatever 1000/7 is
-		lastTimestamp = currentTimestamp
 		if header.PixelFormat == 2 {
 			// Pass H.264 data directly to WebRTC
-			err = webrtc.WriteVideoSample(client, frameBuf, duration)
+			err = webrtc.WriteVideoSample(client, frameBuf, 5) // 5ms was used because it gave ~50-60 fps video stream without any hiccups 
 			if err != nil {
 				return fmt.Errorf("WebRTC write failed: %w", err)
 			}
@@ -337,16 +411,19 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 		// FPS Logging
 		frameCount++
 		now := time.Now()
-		if now.Sub(lastLogTime) >= time.Second && duration > 0 {
-			fps := 1000 / duration
+		if now.Sub(lastLogTime) >= time.Second {
+			fps := frameCount
 			log.Printf("Pipe FPS: %d", fps)
 			frameCount = 0
 			lastLogTime = now
 		}
 	}
-	log.Println("Stream ended")
+
+	log.Println("Video stream ended")
+	client.SetStreaming(false)
 	return nil
 }
+
 
 // findAnnexBStartCode returns the index of the first Annex-B start code (0x000001 or 0x00000001) in buf, or -1 if not found.
 func findAnnexBStartCode(buf []byte) int {
@@ -383,7 +460,7 @@ func StreamAudioFile(client StreamerInterface, mediaFile string) error {
 		}
 
 		if n > 0 {
-			if err := webrtc.WriteAudioSample(client, buffer[:n]); err != nil {
+			if err := webrtc.WriteAudioSample(client, buffer[:n], 20); err != nil {
 				return err
 			}
 		}
@@ -398,6 +475,11 @@ func StreamVideoWithAudio(client StreamerInterface, mediaFile string) error {
 		return err
 
 	}
+	if client.IsStreaming() {
+		return fmt.Errorf("already streaming")
+	}
+	client.SetStreaming(true)
+
 	defer cleanup()
 	videoBuffer, audioBuffer := make([]byte, 1024*32), make([]byte, 1024*4)
 	for client.IsStreaming() {
@@ -412,7 +494,7 @@ func StreamVideoWithAudio(client StreamerInterface, mediaFile string) error {
 			return fmt.Errorf("error reading video data: %w", errv)
 		}
 		if nv > 0 {
-			if err := webrtc.WriteAudioSample(client, videoBuffer[:nv]); err != nil {
+			if err := webrtc.WriteAudioSample(client, videoBuffer[:nv], 20); err != nil {
 				return err
 			}
 		}
@@ -427,7 +509,7 @@ func StreamVideoWithAudio(client StreamerInterface, mediaFile string) error {
 			return fmt.Errorf("error reading video data: %w", erra)
 		}
 		if na > 0 {
-			if err := webrtc.WriteAudioSample(client, audioBuffer[:na]); err != nil {
+			if err := webrtc.WriteAudioSample(client, audioBuffer[:na], 20); err != nil {
 				return err
 			}
 		}

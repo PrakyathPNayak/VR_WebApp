@@ -162,6 +162,9 @@ func (s *SharedMemoryWriter) WriteStdin(obj interface{}, isrunning bool, datatyp
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
+	if len(jsonData) == 0 {
+		return fmt.Errorf("The gyro process has not been properly initialized yet")
+	}
 	if len(jsonData) >= s.size {
 		return fmt.Errorf("JSON data too large for buffer: %d >= %d", len(jsonData), s.size)
 	}

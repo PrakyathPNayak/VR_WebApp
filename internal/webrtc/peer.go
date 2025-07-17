@@ -51,7 +51,7 @@ func SetupPeerConnection(client PeerInterface) error {
         return fmt.Errorf("failed to add video track: %w", err)
     }
     // Uncomment if you want the audio track
-    /*// Create audio track
+    // Create audio track
     audioTrack, _ := webrtc.NewTrackLocalStaticSample(
         webrtc.RTPCodecCapability{
             MimeType:  webrtc.MimeTypeOpus, 
@@ -70,7 +70,6 @@ func SetupPeerConnection(client PeerInterface) error {
         log.Println("Failed to add audio track")
         return fmt.Errorf("failed to add audio track: %w", err)
     }
-    */
     // Set up ICE candidate handling
     peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
         if candidate != nil {

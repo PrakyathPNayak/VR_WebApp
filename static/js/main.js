@@ -24,11 +24,6 @@ class VRStreamApp {
         window.websocketManager.connect();
       }
 
-      // Initialize gyroscope/motion tracking
-      if (window.gyroManager) {
-        await window.gyroManager.enableGyro();
-      }
-
       // Initialize local media stream (optional - for two-way communication)
       // Uncomment if you need two-way communication
       // if (window.webrtcManager) {
