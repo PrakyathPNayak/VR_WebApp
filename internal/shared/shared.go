@@ -58,6 +58,34 @@ func WriteStdinGyroData(jsondat []byte, isrunning bool) error {
 	return nil
 }
 
+/*
+Expected format for hand data to write to stdin of cpp side
+in cpp this is handled by the file handdat_thread.cpp for more refference
+
+	{
+	  "type": "hand",
+	  "payload": [
+	    {
+	      "handedness": "Left",
+	      "landmarks": [
+	        {"x": 0.25, "y": 0.70, "z": -0.05},
+	        {"x": 0.30, "y": 0.65, "z": -0.06},
+	        ...
+	        21 landmarks total
+	      ],
+	      "confidence": 0.95
+	    },
+	    {
+	      "handedness": "Right",
+	      "landmarks": [
+	        {"x": 0.75, "y": 0.70, "z": -0.05},
+	        ...
+	      ],
+	      "confidence": 0.93
+	    }
+	  ]
+	}
+*/
 func WriteStdinHandData(jsondat []byte, isrunning bool) error {
 	payload := map[string]interface{}{
 		"type":    "Hand",
