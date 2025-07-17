@@ -14,7 +14,7 @@ import (
 )
 
 var gyroWriter = &shared.SharedMemoryWriter{}
-var isrunning bool = false
+var isrunning bool = true
 
 func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	var msg types.Message
@@ -174,7 +174,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"timestamp": time.Now().UnixMilli(),
 	}
 	//log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
-	if err := gyroWriter.WriteStdin(data, isrunning); err != nil {
+	if err := gyroWriter.WriteStdin(data, isrunning, 0); err != nil {
 		log.Println("Error writing gyro data to Stdin:", err)
 	}
 
