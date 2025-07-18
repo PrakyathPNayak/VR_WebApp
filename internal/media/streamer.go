@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"layeh.com/gopus"
 )
 
 const (
@@ -261,17 +262,15 @@ func StartVRProcess(client StreamerInterface, exePath, room string) (*VRProcess,
 	audioCmd := exec.Command("ffmpeg",
 	    "-f", "dshow",
 	    "-i", "audio=CABLE Output (VB-Audio Virtual Cable)",
-	    "-acodec", "libopus",
 	    "-ar", "48000",
 	    "-ac", "2",
-	    "-frame_duration", "20",  // 20ms frames
-	    "-application", "voip",   // or "audio" for music
-	    "-b:a", "64k",           // bitrate
-	    "-f", "ogg",             // or "opus"
+	    "-f", "s16le", // raw PCM
+	    "-acodec", "pcm_s16le",
 	    "-nostats",
 	    "-loglevel", "quiet",
 	    "pipe:1",
 	)
+
 	audioOut, err := audioCmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -336,31 +335,59 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 
 	// Start audio goroutine
 	go func() {
-		audioBuf := make([]byte, 4096) // Size depends on FFmpeg output
-		for client.IsStreaming() {
-			n, err := a.Read(audioBuf)
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("Error reading audio: %v", err)
-				}
-				// break
-			}
-			if n > 0 {
-				go func(){
-					log.Println(n)
-					err := webrtc.WriteAudioSample(client, audioBuf[:n], 20) // 20 ms default for 48000 Hz stereo
-					if err != nil {
-						log.Printf("Error writing audio: %v", err)
-						// break
-					}
-				}()
-			}
-			if err != nil { 
-				break
-			}
-		}
-		log.Println("Audio stream ended")
+	    const (
+	        sampleRate    = 48000
+	        channels      = 2
+	        frameSize     = 960                             // 20ms at 48kHz
+	        pcmBytes      = frameSize * channels * 2        // 2 bytes per int16 sample
+	        maxDataBytes  = 1275                            // Opus maximum for one frame per packet
+	    )
+
+	    encoder, err := gopus.NewEncoder(sampleRate, channels, gopus.Audio)
+	    if err != nil {
+	        log.Printf("Failed to create Opus encoder: %v", err)
+	        client.SendError("Opus encoder init failed")
+	        return
+	    }
+
+	    // Optional encoder tuning
+	    encoder.SetBitrate(64000)
+	    encoder.SetApplication(gopus.Audio)
+
+	    rawBuf := make([]byte, pcmBytes)
+	    pcmBuf := make([]int16, frameSize*channels)
+
+	    for client.IsStreaming() {
+	        _, err := io.ReadFull(a, rawBuf)
+	        if err != nil {
+	            if err != io.EOF {
+	                log.Printf("Audio read failed: %v", err)
+	            }
+	            break
+	        }
+
+	        // PCM: little-endian bytes to int16
+	        for i := 0; i < len(pcmBuf); i++ {
+	            pcmBuf[i] = int16(binary.LittleEndian.Uint16(rawBuf[i*2:]))
+	        }
+
+	        // Encode using the correct maxDataBytes
+	        encodedPkt, err := encoder.Encode(pcmBuf, frameSize, maxDataBytes)
+	        if err != nil {
+	            log.Printf("Opus encoding error: %v", err)
+	            continue
+	        }
+
+	        err = webrtc.WriteAudioSample(client, encodedPkt, 20)
+	        if err != nil {
+	            log.Printf("Failed to write audio sample: %v", err)
+	            break
+	        }
+	    }
+
+	    log.Println("Audio stream ended")
 	}()
+
 
 	// Handle video stream in current goroutine
 	var frameCount int

@@ -127,6 +127,8 @@ class WebRTCManager {
         if (this.audioElement.srcObject !== stream) {
           this.audioElement.srcObject = stream;
           this.audioElement.autoplay = true;
+          this.audioElement.muted = false;
+          this.audioElement.volume = 1.0;
 
           setTimeout(() => {
             this.audioElement.play().catch((err) => {
