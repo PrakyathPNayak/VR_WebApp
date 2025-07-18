@@ -47,6 +47,9 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	case "gyro":
 		return handleGyroData(client, msg)
 
+	case "hand":
+		return handleHandData(client, msg)
+
 	default:
 		log.Printf("Unhandled JSON message type from %s: %s", client.GetPeerID(), msg.Type)
 		return nil
@@ -175,6 +178,77 @@ func handleGyroData(client *Client, msg types.Message) error {
 	return nil
 }
 
+func handleHandData(client *Client, msg types.Message) error {
+	if len(msg.Hands) == 0 {
+		log.Printf("No hand landmarks received from %s", client.GetPeerID())
+		return nil
+	}
+
+	log.Printf("📡 Hand data received from peer %s:", client.GetPeerID())
+
+	for handIndex, hand := range msg.Hands {
+		log.Printf("    Hand %d:", handIndex+1)
+		for landmarkIndex, point := range hand {
+			if len(point) >= 3 {
+				x, y, z := point[0], point[1], point[2]
+				log.Printf("    Landmark %2d → x: %.4f, y: %.4f, z: %.4f", landmarkIndex, x, y, z)
+			} else {
+				log.Printf("    Landmark %d → incomplete point data", landmarkIndex)
+			}
+		}
+	}
+
+	return nil
+}
+
+func handleEncryptedHandData(client *Client, handData map[string]interface{}) error {
+	rawHands, ok := handData["hands"]
+	if !ok {
+		log.Printf("🔸 'hands' field missing from handData for %s", client.GetPeerID())
+		return nil
+	}
+
+	hands, ok := rawHands.([]interface{})
+	if !ok {
+		log.Printf("🔸 Invalid 'hands' format from %s", client.GetPeerID())
+		return nil
+	}
+
+	log.Printf("  Hand data received from peer %s:", client.GetPeerID())
+
+	for handIndex, hand := range hands {
+		landmarks, ok := hand.([]interface{})
+		if !ok {
+			log.Printf("    Hand %d has invalid landmark data", handIndex+1)
+			continue
+		}
+
+		log.Printf("    Hand %d:", handIndex+1)
+
+		for landmarkIndex, point := range landmarks {
+			coords, ok := point.([]interface{})
+			if !ok || len(coords) < 3 {
+				log.Printf("    Landmark %d → incomplete or invalid point data", landmarkIndex)
+				continue
+			}
+
+			x, xOk := coords[0].(float64)
+			y, yOk := coords[1].(float64)
+			z, zOk := coords[2].(float64)
+
+			if xOk && yOk && zOk {
+				log.Printf("    Landmark %2d → x: %.4f, y: %.4f, z: %.4f", landmarkIndex, x, y, z)
+			} else {
+				log.Printf("    Landmark %2d → invalid coordinate types", landmarkIndex)
+			}
+		}
+	}
+
+	return nil
+}
+
+
+
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
 	switch msgType {
 	case "start_vr":
@@ -190,6 +264,9 @@ func handleControlMessage(client *Client, msgType string, controlMsg map[string]
 			Message: "VR process started",
 		})
 		log.Printf("VR started for client %s", client.GetPeerID())
+	
+	case "hand":
+		return handleEncryptedHandData(client, controlMsg)
 
 	case "pause":
 		log.Printf("Received pause command from %s", client.GetPeerID())

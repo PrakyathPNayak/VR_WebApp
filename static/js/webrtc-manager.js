@@ -300,7 +300,9 @@ class WebRTCManager {
     if (window.uiManager) {
       window.uiManager.updatePeerList(this.peers);
     }
-
+    if (window.handTrackingManager) {
+      window.handTrackingManager.stopTracking();
+    }
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;

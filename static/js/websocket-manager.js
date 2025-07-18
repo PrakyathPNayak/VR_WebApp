@@ -42,6 +42,9 @@ class WebSocketManager {
         window.webrtcManager.peers.clear();
         window.uiManager.updatePeerList(window.webrtcManager.peers);
       }
+      if (window.handTrackingManager) {
+        window.handTrackingManager.stopTracking();
+      }
     };
 
     this.socket.onerror = () => {
@@ -204,6 +207,10 @@ class WebSocketManager {
       window.uiManager.disableStartVrButton();
     }
     this.sendEncryptedMessage({ type: "start_vr" });
+    if (window.handTrackingManager) {
+      window.handTrackingManager.initialize();
+      this.sendEncryptedMessage({ type: "start_handtracking" });
+    }
   }
 
   sendControl(type) {

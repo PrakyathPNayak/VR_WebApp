@@ -111,4 +111,7 @@ window.disconnect = () => {
   if (window.websocketManager) {
     window.websocketManager.disconnect();
   }
+  if (window.handTrackingManager) {
+    window.handTrackingManager.stopTracking();
+  }
 };

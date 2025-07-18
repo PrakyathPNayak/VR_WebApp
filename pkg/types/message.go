@@ -15,18 +15,18 @@ type Message struct {
     Timestamp    int64                      `json:"timestamp,omitempty"`
     Error        string                     `json:"error,omitempty"`
     Message      string                     `json:"message,omitempty"`
-    
+    Hands        [][][]float32              `json:"hands,omitempty"`
     // WebRTC specific fields
-    Offer     *webrtc.SessionDescription `json:"offer,omitempty"`
-    Answer    *webrtc.SessionDescription `json:"answer,omitempty"`
-    Candidate *webrtc.ICECandidateInit   `json:"candidate,omitempty"`
-    From      string                     `json:"from,omitempty"`
-    Target    string                     `json:"target,omitempty"`
+    Offer        *webrtc.SessionDescription `json:"offer,omitempty"`
+    Answer       *webrtc.SessionDescription `json:"answer,omitempty"`
+    Candidate    *webrtc.ICECandidateInit   `json:"candidate,omitempty"`
+    From         string                     `json:"from,omitempty"`
+    Target       string                     `json:"target,omitempty"`
     
     // Additional fields
-    Alpha     float64 `json:"alpha,omitempty"`
-    Beta      float64 `json:"beta,omitempty"`
-    Gamma     float64 `json:"gamma,omitempty"`
-    Enabled   bool    `json:"enabled,omitempty"`
-    Value     int     `json:"value,omitempty"`
+    Alpha        float64 `json:"alpha,omitempty"`
+    Beta         float64 `json:"beta,omitempty"`
+    Gamma        float64 `json:"gamma,omitempty"`
+    Enabled      bool    `json:"enabled,omitempty"`
+    Value        int     `json:"value,omitempty"`
 }

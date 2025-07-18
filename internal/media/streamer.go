@@ -155,7 +155,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 			client.SendError(fmt.Sprintf("VR streaming error: %v", err))
 		}
 	}()
-	go func() {
+	/*go func() {
 		log.Println("Starting Mediapipe process")
 		//start mediapipe process
 		mediapipe, err := StartMediapipeProcess(room)
@@ -165,7 +165,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 			return
 		}
 		defer mediapipe.Cmd.Process.Kill()
-	}()
+	}()*/
 
 	return nil
 }
