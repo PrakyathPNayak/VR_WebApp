@@ -49,31 +49,72 @@ class GyroManager {
   }
 
   setupGyroListener() {
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    console.log("Setting up motion tracking. Android:", isAndroid);
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    const isiOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+    const isAndroid = /Android/i.test(userAgent);
+
+    console.log(
+      "Setting up motion tracking (iOS:",
+      isiOS,
+      ", Android:",
+      isAndroid,
+      ")",
+    );
 
     this._listener = (event) => {
       const now = Date.now();
+
       if (
         !window.websocketManager ||
         !window.websocketManager.isConnected ||
         now - this.lastSentTime < this.gyroInterval
-      )
+      ) {
         return;
+      }
 
       let { alpha, beta, gamma } = event;
-      const orientation = screen.orientation?.angle || 0;
 
-      if (isAndroid) {
+      // Handle orientation from screen
+      const orientation = screen.orientation?.angle || window.orientation || 0;
+
+      if (isiOS) {
+        // Normalize for iOS to act like Android
+        switch (orientation) {
+          case 0: // Portrait
+            // Flip beta and gamma to match Android portrait
+            beta = -beta;
+            gamma = -gamma;
+            break;
+          case 90: // Landscape left (home button on right)
+            [beta, gamma] = [-gamma, beta];
+            break;
+          case -90:
+          case 270: // Landscape right (home button on left)
+            [beta, gamma] = [gamma, -beta];
+            break;
+          case 180: // Upside-down portrait
+            beta = beta;
+            gamma = -gamma;
+            break;
+          default:
+            console.warn("Unknown screen orientation:", orientation);
+        }
+      } else if (isAndroid) {
+        // Apply only Android-specific normalization if needed
         if (orientation === 0) {
           beta = -beta;
           gamma = -gamma;
-        } else if (orientation === 90 || orientation === -90) {
+        } else if (
+          orientation === 90 ||
+          orientation === -90 ||
+          orientation === 270
+        ) {
           [beta, gamma] = [gamma, beta];
           gamma = -gamma;
         }
       }
 
+      // Send data
       window.websocketManager.sendGyroData(alpha, beta, gamma, now);
       this.lastSentTime = now;
     };
