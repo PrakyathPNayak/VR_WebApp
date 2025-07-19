@@ -94,21 +94,11 @@ go build -o vrserver
 
 > 🔐 Ensure you're serving over `localhost` or HTTPS for Web Crypto API compatibility.
 
-### 3. Serve the Static Frontend
+### 3. Create and edit your env files
 
-You can use any static file server or your Go backend as an HTTP file server.
+Though there are default options, I recommend the user to create their own config for security and compatibility purposes
 
-For example:
-
-```
-cd static/
-python3 -m http.server 8080
-```
-
-Access in the browser:
-```
-http://localhost:8080/
-```
+You can find the header names in `config.go`
 
 ---
 
