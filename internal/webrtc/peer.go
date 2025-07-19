@@ -61,7 +61,7 @@ func SetupPeerConnection(client PeerInterface) error {
         "audio",
         "stream",
     )
-
+    // audioTrack.SetPlayoutDelayHint(0, 0)
     if err != nil {
         return fmt.Errorf("failed to create audio track: %w", err)
     }

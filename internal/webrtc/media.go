@@ -55,7 +55,7 @@ func WriteAudioSample(client MediaInterface, data []byte, duration time.Duration
     
     sample := media.Sample{
         Data:     data,
-        Duration: duration * time.Millisecond, // 20ms audio frames
+        Duration: duration * time.Millisecond, // 10ms audio frames
     }
     
     if err := audioTrack.WriteSample(sample); err != nil {

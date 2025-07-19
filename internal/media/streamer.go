@@ -264,12 +264,16 @@ func StartVRProcess(client StreamerInterface, exePath, room string) (*VRProcess,
 	    "-i", "audio=CABLE Output (VB-Audio Virtual Cable)",
 	    "-ar", "48000",
 	    "-ac", "2",
-	    "-f", "s16le", // raw PCM
+	    "-flags", "low_delay",
+	    "-fflags", "nobuffer",
+	    "-threads", "1",
+	    "-f", "s16le",
 	    "-acodec", "pcm_s16le",
 	    "-nostats",
 	    "-loglevel", "quiet",
 	    "pipe:1",
 	)
+
 
 	audioOut, err := audioCmd.StdoutPipe()
 	if err != nil {
@@ -338,7 +342,7 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	    const (
 	        sampleRate    = 48000
 	        channels      = 2
-	        frameSize     = 960                             // 20ms at 48kHz
+	        frameSize     = 480                             // 10ms at 48kHz
 	        pcmBytes      = frameSize * channels * 2        // 2 bytes per int16 sample
 	        maxDataBytes  = 1275                            // Opus maximum for one frame per packet
 	    )
@@ -353,7 +357,6 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	    // Optional encoder tuning
 	    encoder.SetBitrate(64000)
 	    encoder.SetApplication(gopus.Audio)
-
 	    rawBuf := make([]byte, pcmBytes)
 	    pcmBuf := make([]int16, frameSize*channels)
 
@@ -378,7 +381,7 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	            continue
 	        }
 
-	        err = webrtc.WriteAudioSample(client, encodedPkt, 20)
+	        err = webrtc.WriteAudioSample(client, encodedPkt, 10)
 	        if err != nil {
 	            log.Printf("Failed to write audio sample: %v", err)
 	            break
