@@ -44,7 +44,3 @@ func Initialize() error {
     log.Println("WebRTC codecs initialized successfully")
     return nil
 }
-
-func GetAPI() *webrtc.API {
-    return api
-}
