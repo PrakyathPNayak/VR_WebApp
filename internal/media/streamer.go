@@ -51,6 +51,9 @@ func parseHeader(data []byte) (*FrameHeader, error) {
 type StreamerInterface interface {
 	IsStreaming() bool
 	SetStreaming(bool)
+	IsPaused() bool
+	SetPaused(bool) 
+	GetPausedMutex() *sync.RWMutex
 	GetStreamingMutex() *sync.RWMutex
 	SendError(string)
 	webrtc.MediaInterface
@@ -139,7 +142,7 @@ func StartStreamingFromVR(client StreamerInterface, exePath, room string) error 
 	}
 
 	client.SetStreaming(true)
-
+	client.SetPaused(false)
 	go func() {
 		defer func() {
 			client.SetStreaming(false)
@@ -361,6 +364,9 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	    pcmBuf := make([]int16, frameSize*channels)
 
 	    for client.IsStreaming() {
+	    	if client.IsPaused() {
+	    		continue
+	    	}
 	        _, err := io.ReadFull(a, rawBuf)
 	        if err != nil {
 	            if err != io.EOF {
@@ -397,6 +403,9 @@ func StreamVRVideo(client StreamerInterface, vr *VRProcess) error {
 	lastLogTime := time.Now()
 
 	for client.IsStreaming() {
+		if client.IsPaused() {
+	    		continue
+	    	}
 		_, err := io.ReadFull(r, headerBuf)
 		if err != nil {
 			if err == io.EOF {
@@ -480,6 +489,9 @@ func StreamAudioFile(client StreamerInterface, mediaFile string) error {
 
 	buffer := make([]byte, 1024*32) // 4KB buffer for audio
 	for client.IsStreaming() {
+		if client.IsPaused() {
+	    		continue
+	    	}
 		n, err := audioReader.Read(buffer)
 		if err != nil {
 			if err == io.EOF {
@@ -513,6 +525,9 @@ func StreamVideoWithAudio(client StreamerInterface, mediaFile string) error {
 	defer cleanup()
 	videoBuffer, audioBuffer := make([]byte, 1024*32), make([]byte, 1024*4)
 	for client.IsStreaming() {
+		if client.IsPaused() {
+	    		continue
+	    	}
 		log.Println("isStreaming was changed correctly")
 		nv, errv := videoReader.Read(videoBuffer)
 		log.Println("Reached videoReader")
@@ -559,6 +574,9 @@ func StreamVideoFile(client StreamerInterface, mediaFile string) error {
 	tmp := make([]byte, 4096)
 
 	for client.IsStreaming() {
+		if client.IsPaused() {
+	    		continue
+	    	}
 		n, err := videoReader.Read(tmp)
 		if err != nil {
 			if err == io.EOF {
