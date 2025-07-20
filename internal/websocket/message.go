@@ -27,7 +27,19 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 		return handleAESKeyExchange(client, msg)
 
 	case "start_vr":
-		return handleStartStream(client, msg)
+		err := gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
+		if err != nil {
+			log.Fatal("Failed to initialize gyro shared memory:", err)
+			return err
+		}
+		configStruct := config.Load()
+		go media.StartStreaming(client, configStruct.DefaultFilePath)
+		client.SendMessage(types.Message{
+			Type:    "vr_ready",
+			Message: "VR process started",
+		})
+		log.Printf("VR started for client %s", client.GetPeerID())
+		return nil
 
 	case "stop_stream":
 		return handleStopStream(client)
@@ -41,8 +53,8 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	case "webrtc_ice_candidate":
 		return handleWebRTCICECandidate(client, msg, room)
 
-	case "encrypted_data":
-		return handleEncryptedData(client, msg)
+	/*case "encrypted_data":
+		return handleEncryptedData(client, msg, room)*/
 
 	case "gyro":
 		return handleGyroData(client, msg)
@@ -50,13 +62,47 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	case "hand":
 		return handleHandData(client, msg)
 
+	case "pause":
+		log.Printf("Received pause command from %s", client.GetPeerID())
+		// return handleStopStream(client)
+		client.SetPaused(true)
+		return nil
+
+	case "resume":
+		log.Printf("Received resume command from %s", client.GetPeerID())
+		// return handleStartStream(client, msg)
+		client.SetPaused(false)
+		return nil
+
+	case "terminate":
+		log.Printf("Received terminate command from %s", client.GetPeerID())
+		client.SetStreaming(false)
+		gyroWriter.Close()
+		return fmt.Errorf("client requested termination")
+	
+	case "quality":
+		if value := msg.Value; value > 0 && value <= 100 {
+			log.Printf("Received quality change from %s: %d", client.GetPeerID(), int(value))
+		}
+		return nil
+
+	case "toggle_vr_debugging":
+		if enabled := msg.Enabled; enabled {
+			log.Printf("VR debugging toggled by %s: %t", client.GetPeerID(), enabled)
+			client.SendMessage(types.Message{
+				Type:    "vr_debugging_status",
+				Message: fmt.Sprintf("VR debugging %s", map[bool]string{true: "enabled", false: "disabled"}[enabled]),
+			})
+		}
+		return nil
+
 	default:
 		log.Printf("Unhandled JSON message type from %s: %s", client.GetPeerID(), msg.Type)
 		return nil
 	}
 }
 
-func HandleBinaryMessage(client *Client, data []byte) error {
+func HandleBinaryMessage(client *Client, data []byte, room *Room) error {
 	// Decrypt the binary data
 	decryptedData, err := client.DecryptBinaryData(data)
 	if err != nil {
@@ -64,7 +110,7 @@ func HandleBinaryMessage(client *Client, data []byte) error {
 	}
 
 	// Parse decrypted data as JSON
-	var controlMsg map[string]interface{}
+	/*var controlMsg map[string]interface{}
 	if err := json.Unmarshal(decryptedData, &controlMsg); err != nil {
 		return fmt.Errorf("invalid binary control message: %w", err)
 	}
@@ -74,7 +120,8 @@ func HandleBinaryMessage(client *Client, data []byte) error {
 		return fmt.Errorf("invalid binary control message type")
 	}
 
-	return handleControlMessage(client, msgType, controlMsg)
+	return handleControlMessage(client, msgType, controlMsg)*/
+	return HandleJSONMessage(client, decryptedData, room)
 }
 
 func handleAESKeyExchange(client *Client, msg types.Message) error {
@@ -144,13 +191,13 @@ func handleWebRTCICECandidate(client *Client, msg types.Message, room *Room) err
 	return webrtc.HandleICECandidate(client, msg)
 }
 
-func handleEncryptedData(client *Client, msg types.Message) error {
+func handleEncryptedData(client *Client, msg types.Message, room *Room) error {
 	decryptedData, err := client.DecryptData(msg.Data)
 	if err != nil {
 		return fmt.Errorf("decryption failed: %w", err)
 	}
 
-	var controlMsg map[string]interface{}
+	/*var controlMsg map[string]interface{}
 	if err := json.Unmarshal(decryptedData, &controlMsg); err != nil {
 		return fmt.Errorf("invalid control message: %w", err)
 	}
@@ -160,7 +207,9 @@ func handleEncryptedData(client *Client, msg types.Message) error {
 		return fmt.Errorf("invalid control message type")
 	}
 
-	return handleControlMessage(client, msgType, controlMsg)
+	return handleControlMessage(client, msgType, controlMsg)*/
+
+	return HandleJSONMessage(client, decryptedData, room)
 }
 
 func handleGyroData(client *Client, msg types.Message) error {
@@ -270,9 +319,11 @@ func handleControlMessage(client *Client, msgType string, controlMsg map[string]
 
 	case "pause":
 		log.Printf("Received pause command from %s", client.GetPeerID())
+		return handleStopStream(client)
 
 	case "resume":
 		log.Printf("Received resume command from %s", client.GetPeerID())
+		// return handleStartStream(client, controlMsg)
 
 	case "terminate":
 		log.Printf("Received terminate command from %s", client.GetPeerID())

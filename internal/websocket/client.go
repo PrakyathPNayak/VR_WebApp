@@ -25,7 +25,9 @@ type Client struct {
     videoTrack     *webrtc.TrackLocalStaticSample
     audioTrack     *webrtc.TrackLocalStaticSample
     isStreaming    bool
+    isPaused       bool
     streamingMutex sync.RWMutex
+    pausedMutex    sync.RWMutex // I may remove it later at the end of the project depending on how we end up using this
 }
 
 func NewClient(conn *websocket.Conn, peerID, room string) *Client {
@@ -104,6 +106,22 @@ func (c *Client) IsStreaming() bool {
     c.streamingMutex.RLock()
     defer c.streamingMutex.RUnlock()
     return c.isStreaming
+}
+
+func (c *Client) IsPaused() bool {
+    c.pausedMutex.RLock()
+    defer c.pausedMutex.RUnlock()
+    return c.isPaused
+}
+
+func (c *Client) SetPaused(paused bool) {
+    c.pausedMutex.Lock()
+    defer c.pausedMutex.Unlock()
+    c.isPaused = paused
+}
+
+func (c *Client) GetPausedMutex() *sync.RWMutex {
+    return &c.pausedMutex
 }
 
 func (c *Client) SetStreaming(streaming bool) {

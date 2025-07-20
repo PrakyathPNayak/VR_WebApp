@@ -34,7 +34,7 @@ func (s *Server) Start() error {
 		http.ServeFile(w, r, "static/stream.html")
 	})
 
-	http.HandleFunc("/ws/webrtc/", websocket.HandleWebRTCWS)
+	http.HandleFunc("/ws/webrtc/", websocket.HandleWebSocket)
 
 	// Use HTTPS
 	certPath := "cert.pem"
