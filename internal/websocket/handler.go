@@ -87,7 +87,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
             }
 
         case websocket.BinaryMessage:
-            if err := HandleBinaryMessage(client, data); err != nil {
+            if err := HandleBinaryMessage(client, data, room); err != nil {
                 log.Printf("Error handling binary message from %s: %v", peerID, err)
                 client.SendError(fmt.Sprintf("Binary message handling failed: %v", err))
             }
