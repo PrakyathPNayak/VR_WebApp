@@ -238,7 +238,7 @@ class WebSocketManager {
 
   sendGyroData(alpha, beta, gamma, timestamp) {
     if (this.socket && this.isConnected) {
-      this.sendMessage({
+      this.sendEncryptedMessage({
         type: "gyro",
         alpha,
         beta,

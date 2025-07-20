@@ -45,9 +45,9 @@ class WebRTCManager {
           if (sender.track && sender.track.kind === "video") {
             const params = sender.getParameters();
             if (!params.encodings) params.encodings = [{}];
-            params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps
+            params.encodings[0].maxBitrate = 20_000_000; // 20 Mbps
             sender.setParameters(params);
-            console.log("[WebRTC] Set maxBitrate to 5 Mbps for video sender");
+            console.log("[WebRTC] Set maxBitrate to 20 Mbps for video sender");
           }
         });
       }, 0);
