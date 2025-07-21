@@ -42,6 +42,9 @@ class WebSocketManager {
         window.webrtcManager.peers.clear();
         window.uiManager.updatePeerList(window.webrtcManager.peers);
       }
+      if (window.handTrackingManager) {
+        window.handTrackingManager.stopTracking();
+      }
     };
 
     this.socket.onerror = () => {
@@ -92,6 +95,10 @@ class WebSocketManager {
         break;
 
       case "vr_ready":
+        // Initialize gyroscope/motion tracking
+        if (window.gyroManager) {
+          await window.gyroManager.enableGyro();
+        }
         if (window.uiManager) {
           window.uiManager.updateStatus(
             "VR process started. Establishing WebRTC...",
@@ -200,6 +207,10 @@ class WebSocketManager {
       window.uiManager.disableStartVrButton();
     }
     this.sendEncryptedMessage({ type: "start_vr" });
+    if (window.handTrackingManager) {
+      window.handTrackingManager.initialize();
+      this.sendEncryptedMessage({ type: "start_handtracking" });
+    }
   }
 
   sendControl(type) {
@@ -227,12 +238,20 @@ class WebSocketManager {
 
   sendGyroData(alpha, beta, gamma, timestamp) {
     if (this.socket && this.isConnected) {
-      this.sendMessage({
+      this.sendEncryptedMessage({
         type: "gyro",
         alpha,
         beta,
         gamma,
         timestamp,
+      });
+    }
+  }
+  sendHanddata(handsData) {
+    if (this.socket && this.isConnected) {
+      this.sendEncryptedMessage({
+        type: "hand",
+        hands: handsData,
       });
     }
   }

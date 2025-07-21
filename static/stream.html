@@ -4,6 +4,7 @@
     <title>WebRTC VR Stream</title>
     <link rel="stylesheet" href="/static/stylesheet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0"></script>
   </head>
   <body>
     <div class="container">
@@ -46,11 +47,27 @@
       </button>
     </div>
 
+    <div class="camera-controls" style="margin-top: 10px">
+      <label for="cameraSelect">Select Camera:</label>
+      <select id="cameraSelect"></select>
+      <button id="startHandTrackingBtn">Start Hand Tracking</button>
+    </div>
+
+    <!-- For hand tracking input -->
+    <video
+      id="handTrackingVideo"
+      style="display: block"
+      autoplay
+      playsinline
+      muted
+    ></video>
+
     <script src="/static/js/crypto-utils.js"></script>
     <script src="/static/js/webrtc-manager.js"></script>
     <script src="/static/js/websocket-manager.js"></script>
     <script src="/static/js/ui-manager.js"></script>
     <script src="/static/js/gyro-manager.js"></script>
+    <script type="module" src="/static/js/hand-tracking.js"></script>
     <script src="/static/js/main.js"></script>
   </body>
 </html>

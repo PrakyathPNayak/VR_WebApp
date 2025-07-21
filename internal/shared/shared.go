@@ -30,17 +30,17 @@ func InitmediapipeStdin(stdin io.WriteCloser) {
 }
 
 func WriteStdinGyroData(jsondat []byte, isrunning bool) error {
-	payload := map[string]interface{}{
+	/*payload := map[string]interface{}{
 		"type":    "Gyro",
 		"payload": json.RawMessage(jsondat),
-	}
+	}*/
 	if gyro_stdin == nil {
 		return fmt.Errorf("gyro_stdin is not initialized")
 	}
-	jsondat, errj := json.Marshal(payload)
-	if errj != nil {
+	// jsondat, errj := json.Marshal(payload)
+	/*if err != nil {
 		return fmt.Errorf("failed to create payload")
-	}
+	} */
 	jsondat = append(jsondat, '\n') // Ensure newline for proper parsing
 	_, err := gyro_stdin.Write(jsondat)
 	if err != nil {
@@ -161,6 +161,9 @@ func (s *SharedMemoryWriter) WriteStdin(obj interface{}, isrunning bool, datatyp
 	jsonData, err := json.Marshal(obj)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	if len(jsonData) == 0 {
+		return fmt.Errorf("The gyro process has not been properly initialized yet")
 	}
 	if len(jsonData) >= s.size {
 		return fmt.Errorf("JSON data too large for buffer: %d >= %d", len(jsonData), s.size)

@@ -27,7 +27,19 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 		return handleAESKeyExchange(client, msg)
 
 	case "start_vr":
-		return handleStartStream(client, msg)
+		err := gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
+		if err != nil {
+			log.Fatal("Failed to initialize gyro shared memory:", err)
+			return err
+		}
+		configStruct := config.Load()
+		go media.StartStreaming(client, configStruct.DefaultFilePath)
+		client.SendMessage(types.Message{
+			Type:    "vr_ready",
+			Message: "VR process started",
+		})
+		log.Printf("VR started for client %s", client.GetPeerID())
+		return nil
 
 	case "stop_stream":
 		return handleStopStream(client)
@@ -41,11 +53,50 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	case "webrtc_ice_candidate":
 		return handleWebRTCICECandidate(client, msg, room)
 
-	case "encrypted_data":
-		return handleEncryptedData(client, msg)
-
+	/*case "encrypted_data":
+		return handleEncryptedData(client, msg, room)*/
+	case "start_handtracking":
+		log.Println("Hand tracking has been initialized")
+		return nil
 	case "gyro":
 		return handleGyroData(client, msg)
+
+	case "hand":
+		return handleHandData(client, msg)
+
+	case "pause":
+		log.Printf("Received pause command from %s", client.GetPeerID())
+		// return handleStopStream(client)
+		client.SetPaused(true)
+		return nil
+
+	case "resume":
+		log.Printf("Received resume command from %s", client.GetPeerID())
+		// return handleStartStream(client, msg)
+		client.SetPaused(false)
+		return nil
+
+	case "terminate":
+		log.Printf("Received terminate command from %s", client.GetPeerID())
+		client.SetStreaming(false)
+		gyroWriter.Close()
+		return fmt.Errorf("client requested termination")
+	
+	case "quality":
+		if value := msg.Value; value > 0 && value <= 100 {
+			log.Printf("Received quality change from %s: %d", client.GetPeerID(), int(value))
+		}
+		return nil
+
+	case "toggle_vr_debugging":
+		if enabled := msg.Enabled; enabled {
+			log.Printf("VR debugging toggled by %s: %t", client.GetPeerID(), enabled)
+			client.SendMessage(types.Message{
+				Type:    "vr_debugging_status",
+				Message: fmt.Sprintf("VR debugging %s", map[bool]string{true: "enabled", false: "disabled"}[enabled]),
+			})
+		}
+		return nil
 
 	default:
 		log.Printf("Unhandled JSON message type from %s: %s", client.GetPeerID(), msg.Type)
@@ -53,7 +104,7 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	}
 }
 
-func HandleBinaryMessage(client *Client, data []byte) error {
+func HandleBinaryMessage(client *Client, data []byte, room *Room) error {
 	// Decrypt the binary data
 	decryptedData, err := client.DecryptBinaryData(data)
 	if err != nil {
@@ -61,7 +112,7 @@ func HandleBinaryMessage(client *Client, data []byte) error {
 	}
 
 	// Parse decrypted data as JSON
-	var controlMsg map[string]interface{}
+	/*var controlMsg map[string]interface{}
 	if err := json.Unmarshal(decryptedData, &controlMsg); err != nil {
 		return fmt.Errorf("invalid binary control message: %w", err)
 	}
@@ -71,7 +122,8 @@ func HandleBinaryMessage(client *Client, data []byte) error {
 		return fmt.Errorf("invalid binary control message type")
 	}
 
-	return handleControlMessage(client, msgType, controlMsg)
+	return handleControlMessage(client, msgType, controlMsg)*/
+	return HandleJSONMessage(client, decryptedData, room)
 }
 
 func handleAESKeyExchange(client *Client, msg types.Message) error {
@@ -84,12 +136,6 @@ func handleAESKeyExchange(client *Client, msg types.Message) error {
 		return err
 	}
 
-	err = gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
-
-	if err != nil {
-		log.Fatal("Failed to initialize gyro shared memory:", err)
-		return err
-	}
 	ack := types.Message{Type: "key_exchange_complete"}
 	return client.SendMessage(ack)
 }
@@ -147,13 +193,13 @@ func handleWebRTCICECandidate(client *Client, msg types.Message, room *Room) err
 	return webrtc.HandleICECandidate(client, msg)
 }
 
-func handleEncryptedData(client *Client, msg types.Message) error {
+func handleEncryptedData(client *Client, msg types.Message, room *Room) error {
 	decryptedData, err := client.DecryptData(msg.Data)
 	if err != nil {
 		return fmt.Errorf("decryption failed: %w", err)
 	}
 
-	var controlMsg map[string]interface{}
+	/*var controlMsg map[string]interface{}
 	if err := json.Unmarshal(decryptedData, &controlMsg); err != nil {
 		return fmt.Errorf("invalid control message: %w", err)
 	}
@@ -163,7 +209,9 @@ func handleEncryptedData(client *Client, msg types.Message) error {
 		return fmt.Errorf("invalid control message type")
 	}
 
-	return handleControlMessage(client, msgType, controlMsg)
+	return handleControlMessage(client, msgType, controlMsg)*/
+
+	return HandleJSONMessage(client, decryptedData, room)
 }
 
 func handleGyroData(client *Client, msg types.Message) error {
@@ -173,7 +221,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"gamma":     msg.Gamma,
 		"timestamp": time.Now().UnixMilli(),
 	}
-	//log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
+	// log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
 	if err := gyroWriter.WriteStdin(data, isrunning, 0); err != nil {
 		log.Println("Error writing gyro data to Stdin:", err)
 	}
@@ -181,9 +229,85 @@ func handleGyroData(client *Client, msg types.Message) error {
 	return nil
 }
 
+func handleHandData(client *Client, msg types.Message) error {
+	if len(msg.Hands) == 0 {
+		log.Printf("No hand landmarks received from %s", client.GetPeerID())
+		return nil
+	}
+
+	log.Printf("📡 Hand data received from peer %s:", client.GetPeerID())
+
+	for handIndex, hand := range msg.Hands {
+		log.Printf("    Hand %d:", handIndex+1)
+		for landmarkIndex, point := range hand {
+			if len(point) >= 3 {
+				x, y, z := point[0], point[1], point[2]
+				log.Printf("    Landmark %2d → x: %.4f, y: %.4f, z: %.4f", landmarkIndex, x, y, z)
+			} else {
+				log.Printf("    Landmark %d → incomplete point data", landmarkIndex)
+			}
+		}
+	}
+
+	return nil
+}
+
+func handleEncryptedHandData(client *Client, handData map[string]interface{}) error {
+	rawHands, ok := handData["hands"]
+	if !ok {
+		log.Printf("🔸 'hands' field missing from handData for %s", client.GetPeerID())
+		return nil
+	}
+
+	hands, ok := rawHands.([]interface{})
+	if !ok {
+		log.Printf("🔸 Invalid 'hands' format from %s", client.GetPeerID())
+		return nil
+	}
+
+	log.Printf("  Hand data received from peer %s:", client.GetPeerID())
+
+	for handIndex, hand := range hands {
+		landmarks, ok := hand.([]interface{})
+		if !ok {
+			log.Printf("    Hand %d has invalid landmark data", handIndex+1)
+			continue
+		}
+
+		log.Printf("    Hand %d:", handIndex+1)
+
+		for landmarkIndex, point := range landmarks {
+			coords, ok := point.([]interface{})
+			if !ok || len(coords) < 3 {
+				log.Printf("    Landmark %d → incomplete or invalid point data", landmarkIndex)
+				continue
+			}
+
+			x, xOk := coords[0].(float64)
+			y, yOk := coords[1].(float64)
+			z, zOk := coords[2].(float64)
+
+			if xOk && yOk && zOk {
+				log.Printf("    Landmark %2d → x: %.4f, y: %.4f, z: %.4f", landmarkIndex, x, y, z)
+			} else {
+				log.Printf("    Landmark %2d → invalid coordinate types", landmarkIndex)
+			}
+		}
+	}
+
+	return nil
+}
+
+
+
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
 	switch msgType {
 	case "start_vr":
+		err := gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
+		if err != nil {
+			log.Fatal("Failed to initialize gyro shared memory:", err)
+			return err
+		}
 		configStruct := config.Load()
 		go media.StartStreaming(client, configStruct.DefaultFilePath)
 		client.SendMessage(types.Message{
@@ -191,12 +315,17 @@ func handleControlMessage(client *Client, msgType string, controlMsg map[string]
 			Message: "VR process started",
 		})
 		log.Printf("VR started for client %s", client.GetPeerID())
+	
+	case "hand":
+		return handleEncryptedHandData(client, controlMsg)
 
 	case "pause":
 		log.Printf("Received pause command from %s", client.GetPeerID())
+		return handleStopStream(client)
 
 	case "resume":
 		log.Printf("Received resume command from %s", client.GetPeerID())
+		// return handleStartStream(client, controlMsg)
 
 	case "terminate":
 		log.Printf("Received terminate command from %s", client.GetPeerID())

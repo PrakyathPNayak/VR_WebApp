@@ -45,9 +45,9 @@ class WebRTCManager {
           if (sender.track && sender.track.kind === "video") {
             const params = sender.getParameters();
             if (!params.encodings) params.encodings = [{}];
-            params.encodings[0].maxBitrate = 5_000_000; // 5 Mbps
+            params.encodings[0].maxBitrate = 20_000_000; // 20 Mbps
             sender.setParameters(params);
-            console.log("[WebRTC] Set maxBitrate to 5 Mbps for video sender");
+            console.log("[WebRTC] Set maxBitrate to 20 Mbps for video sender");
           }
         });
       }, 0);
@@ -127,6 +127,8 @@ class WebRTCManager {
         if (this.audioElement.srcObject !== stream) {
           this.audioElement.srcObject = stream;
           this.audioElement.autoplay = true;
+          this.audioElement.muted = false;
+          this.audioElement.volume = 1.0;
 
           setTimeout(() => {
             this.audioElement.play().catch((err) => {
@@ -300,7 +302,9 @@ class WebRTCManager {
     if (window.uiManager) {
       window.uiManager.updatePeerList(this.peers);
     }
-
+    if (window.handTrackingManager) {
+      window.handTrackingManager.stopTracking();
+    }
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
