@@ -95,7 +95,8 @@ class HandTrackingManager {
       this.predictLoop();
     };
   }
-predictLoop() {
+
+  predictLoop() {
     if (!this.handLandmarker || this.trackingInterval) return;
 
     this.trackingInterval = setInterval(() => {
@@ -117,14 +118,9 @@ predictLoop() {
             confidence: handednessInfo.score,
           };
         });
-
-        window.websocketManager?.sendMessage({
-          type: "hand",
-          payload: payload,
-        });
+        window.websocketManager.sendHanddata(handsData);
       }
-      // MODIFICATION END
-    }, 33); // ~30 fps
+    }, 50); // ~20 fps
   }
 
   stopTracking() {
