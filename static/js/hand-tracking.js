@@ -95,7 +95,6 @@ class HandTrackingManager {
       this.predictLoop();
     };
   }
-
   predictLoop() {
     if (!this.handLandmarker || this.trackingInterval) return;
 
@@ -106,11 +105,18 @@ class HandTrackingManager {
         now,
       );
 
-      if (results?.landmarks?.length > 0) {
-        const handsData = results.landmarks.map((hand) =>
-          hand.map(({ x, y, z }) => [x, y, z]),
-        );
+      // MODIFICATION START: Reformat the data to the desired structure
+      if (results.landmarks && results.landmarks.length > 0) {
+        const payload = results.landmarks.map((landmarkList, index) => {
+          const handednessInfo = results.handedness[index][0]; // MediaPipe returns handedness in a nested array
 
+          // landmarkList is already an array of {x, y, z} objects
+          return {
+            handedness: handednessInfo.categoryName,
+            landmarks: landmarkList,
+            confidence: handednessInfo.score,
+          };
+        });
         window.websocketManager.sendHanddata(handsData);
       }
     }, 50); // ~20 fps
