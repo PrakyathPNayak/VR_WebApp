@@ -55,7 +55,9 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 
 	/*case "encrypted_data":
 		return handleEncryptedData(client, msg, room)*/
-
+	case "start_handtracking":
+		log.Println("Hand tracking has been initialized")
+		return nil
 	case "gyro":
 		return handleGyroData(client, msg)
 

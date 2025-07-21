@@ -111,10 +111,7 @@ class HandTrackingManager {
           hand.map(({ x, y, z }) => [x, y, z]),
         );
 
-        window.websocketManager?.sendEncrytpedMessage({
-          type: "hand",
-          hands: handsData,
-        });
+        window.websocketManager.sendHanddata(handsData);
       }
     }, 50); // ~20 fps
   }

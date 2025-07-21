@@ -247,6 +247,14 @@ class WebSocketManager {
       });
     }
   }
+  sendHanddata(handsData) {
+    if (this.socket && this.isConnected) {
+      this.sendEncryptedMessage({
+        type: "hand",
+        hands: handsData,
+      });
+    }
+  }
 }
 
 // Create global instance
