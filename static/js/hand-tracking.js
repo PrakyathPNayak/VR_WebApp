@@ -95,6 +95,7 @@ class HandTrackingManager {
       this.predictLoop();
     };
   }
+
   predictLoop() {
     if (!this.handLandmarker || this.trackingInterval) return;
 
