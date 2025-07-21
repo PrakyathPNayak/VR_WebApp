@@ -15,7 +15,7 @@ type Message struct {
     Timestamp    int64                      `json:"timestamp,omitempty"`
     Error        string                     `json:"error,omitempty"`
     Message      string                     `json:"message,omitempty"`
-    Hands        [][][]float32              `json:"hands,omitempty"`
+    Hands        HandTrackingData           `json:"hands,omitempty"`
     // WebRTC specific fields
     Offer        *webrtc.SessionDescription `json:"offer,omitempty"`
     Answer       *webrtc.SessionDescription `json:"answer,omitempty"`
@@ -29,4 +29,24 @@ type Message struct {
     Gamma        float64 `json:"gamma,omitempty"`
     Enabled      bool    `json:"enabled,omitempty"`
     Value        int     `json:"value,omitempty"`
+}
+
+// Landmark represents a single 3D coordinate (x, y, z).
+type Landmark struct {
+    X float32 `json:"x"`
+    Y float32 `json:"y"`
+    Z float32 `json:"z"`
+}
+
+// Hand contains all information for a single detected hand.
+type Hand struct {
+    Handedness string     `json:"handedness"`
+    Landmarks  []Landmark `json:"landmarks"`
+    Confidence float32    `json:"confidence"`
+}
+
+// HandTrackingData is the top-level object received from the JavaScript client.
+type HandTrackingData struct {
+    Type    string `json:"type"`
+    Payload []Hand `json:"payload"`
 }

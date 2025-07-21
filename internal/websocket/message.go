@@ -58,6 +58,7 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	case "start_handtracking":
 		log.Println("Hand tracking has been initialized")
 		return nil
+
 	case "gyro":
 		return handleGyroData(client, msg)
 
@@ -230,22 +231,34 @@ func handleGyroData(client *Client, msg types.Message) error {
 }
 
 func handleHandData(client *Client, msg types.Message) error {
-	if len(msg.Hands) == 0 {
+	// 1. Check the 'Payload' slice, which contains the list of hands.
+	if len(msg.Hands.Payload) == 0{
+		return fmt.Errorf("Hands element not present or not processed correctly")
+	}
+	data := msg.Hands
+	if len(data.Payload) == 0 {
 		log.Printf("No hand landmarks received from %s", client.GetPeerID())
 		return nil
 	}
 
 	log.Printf("📡 Hand data received from peer %s:", client.GetPeerID())
 
-	for handIndex, hand := range msg.Hands {
-		log.Printf("    Hand %d:", handIndex+1)
-		for landmarkIndex, point := range hand {
-			if len(point) >= 3 {
-				x, y, z := point[0], point[1], point[2]
-				log.Printf("    Landmark %2d → x: %.4f, y: %.4f, z: %.4f", landmarkIndex, x, y, z)
-			} else {
-				log.Printf("    Landmark %d → incomplete point data", landmarkIndex)
-			}
+	// 2. Loop over the 'Payload' slice. 'hand' is now a struct.
+	for handIndex, hand := range data.Payload {
+		// Log the new data like Handedness and Confidence.
+		log.Printf("    Hand %d: %s (Confidence: %.2f%%)",
+			handIndex+1,
+			hand.Handedness,
+			hand.Confidence*100)
+
+		// 3. Loop over the 'Landmarks' slice within the 'hand' struct.
+		for landmarkIndex, landmark := range hand.Landmarks {
+			// 4. Access coordinates by field name (e.g., landmark.X).
+			log.Printf("        Landmark %2d → x: %.4f, y: %.4f, z: %.4f", 
+				landmarkIndex, 
+				landmark.X, 
+				landmark.Y, 
+				landmark.Z)
 		}
 	}
 

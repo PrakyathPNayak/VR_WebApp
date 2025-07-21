@@ -97,30 +97,47 @@ class HandTrackingManager {
   }
 
   predictLoop() {
-    if (!this.handLandmarker || this.trackingInterval) return;
+    const loop = () => {
+      // Stop the loop if the tracking has been stopped
+      if (!this.videoElement.srcObject) {
+        return;
+      }
 
-    this.trackingInterval = setInterval(() => {
       const now = performance.now();
       const results = this.handLandmarker.detectForVideo(
         this.videoElement,
         now,
       );
 
-      // MODIFICATION START: Reformat the data to the desired structure
       if (results.landmarks && results.landmarks.length > 0) {
-        const payload = results.landmarks.map((landmarkList, index) => {
-          const handednessInfo = results.handedness[index][0]; // MediaPipe returns handedness in a nested array
-
-          // landmarkList is already an array of {x, y, z} objects
+        // 1. Map the raw landmark data to an array of hand objects.
+        // This is the array that will go inside the "payload" key.
+        const handsArray = results.landmarks.map((landmarkList, index) => {
+          const handednessInfo = results.handednesses[index][0];
           return {
             handedness: handednessInfo.categoryName,
             landmarks: landmarkList,
             confidence: handednessInfo.score,
           };
         });
-        window.websocketManager.sendHanddata(handsData);
+
+        // 2. Create the final data object in the required format.
+        const dataToSend = {
+          type: "hand",
+          payload: handsArray,
+        };
+
+        // 3. Send the formatted data.
+        // Assuming websocketManager will handle JSON.stringify if needed.
+        window.websocketManager.sendHanddata(dataToSend);
       }
-    }, 50); // ~20 fps
+
+      // Request the next animation frame to continue the loop.
+      window.requestAnimationFrame(loop);
+    };
+
+    // Start the prediction loop.
+    window.requestAnimationFrame(loop);
   }
 
   stopTracking() {
