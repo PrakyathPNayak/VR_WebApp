@@ -244,7 +244,7 @@ func StartVRProcess(client StreamerInterface, exePath, room string) (*VRProcess,
 		return nil, err
 	}
 	log.Println("VR stdin pipe created")
-	shared.InitGyroStdin(stdin) // Store the stdin for gyro data
+	shared.InitSharedStdin(stdin) // Store the stdin for gyro data
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

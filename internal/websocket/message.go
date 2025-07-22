@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var gyroWriter = &shared.SharedMemoryWriter{}
+var stdinWriter = &shared.SharedMemoryWriter{}
 var isrunning bool = true
 
 func HandleJSONMessage(client *Client, data []byte, room *Room) error {
@@ -27,7 +27,7 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 		return handleAESKeyExchange(client, msg)
 
 	case "start_vr":
-		err := gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
+		err := stdinWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
 		if err != nil {
 			log.Fatal("Failed to initialize gyro shared memory:", err)
 			return err
@@ -80,7 +80,7 @@ func HandleJSONMessage(client *Client, data []byte, room *Room) error {
 	case "terminate":
 		log.Printf("Received terminate command from %s", client.GetPeerID())
 		client.SetStreaming(false)
-		gyroWriter.Close()
+		stdinWriter.Close()
 		return fmt.Errorf("client requested termination")
 	
 	case "quality":
@@ -223,7 +223,7 @@ func handleGyroData(client *Client, msg types.Message) error {
 		"timestamp": time.Now().UnixMilli(),
 	}
 	// log.Printf("Received gyro data from %s: %+v", client.GetPeerID(), data)
-	if err := gyroWriter.WriteStdin(data, isrunning, 0); err != nil {
+	if err := stdinWriter.WriteStdin(data, isrunning, 0); err != nil {
 		log.Println("Error writing gyro data to Stdin:", err)
 	}
 
@@ -231,35 +231,23 @@ func handleGyroData(client *Client, msg types.Message) error {
 }
 
 func handleHandData(client *Client, msg types.Message) error {
-	// 1. Check the 'Payload' slice, which contains the list of hands.
-	if len(msg.Hands.Payload) == 0{
-		return fmt.Errorf("Hands element not present or not processed correctly")
-	}
-	data := msg.Hands
-	if len(data.Payload) == 0 {
-		log.Printf("No hand landmarks received from %s", client.GetPeerID())
+	// 1. If the payload has no hands, it's a valid state (no hands in view).
+	if len(msg.Hands.Payload) == 0 {
 		return nil
 	}
 
-	log.Printf("📡 Hand data received from peer %s:", client.GetPeerID())
+	// 2. Log receipt of data for operational awareness.
+	log.Printf("📡 Hand data received from peer %s, writing to process.", client.GetPeerID())
 
-	// 2. Loop over the 'Payload' slice. 'hand' is now a struct.
-	for handIndex, hand := range data.Payload {
-		// Log the new data like Handedness and Confidence.
-		log.Printf("    Hand %d: %s (Confidence: %.2f%%)",
-			handIndex+1,
-			hand.Handedness,
-			hand.Confidence*100)
-
-		// 3. Loop over the 'Landmarks' slice within the 'hand' struct.
-		for landmarkIndex, landmark := range hand.Landmarks {
-			// 4. Access coordinates by field name (e.g., landmark.X).
-			log.Printf("        Landmark %2d → x: %.4f, y: %.4f, z: %.4f", 
-				landmarkIndex, 
-				landmark.X, 
-				landmark.Y, 
-				landmark.Z)
-		}
+	// 3. Pass the hand data payload to the generic writer.
+	// We pass `msg.Hands.Payload`, which is a slice of Hand structs.
+	// `WriteStdin` will marshal this slice into a JSON array.
+	// `WriteStdinHandData` will then wrap it in the final object.
+	// The '1' indicates this is hand data.
+	if err := stdinWriter.WriteStdin(msg.Hands.Payload, isrunning, 1); err != nil {
+		log.Println("Error writing hand data to Stdin:", err)
+		// We log the error but return nil to allow the server to continue,
+		// matching the pattern of a fire-and-forget handler.
 	}
 
 	return nil
@@ -316,7 +304,7 @@ func handleEncryptedHandData(client *Client, handData map[string]interface{}) er
 func handleControlMessage(client *Client, msgType string, controlMsg map[string]interface{}) error {
 	switch msgType {
 	case "start_vr":
-		err := gyroWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
+		err := stdinWriter.NewSharedMemoryWriter("gyro.dat", 65536) // initialize the gyroWriter on key exchange complete
 		if err != nil {
 			log.Fatal("Failed to initialize gyro shared memory:", err)
 			return err
@@ -343,7 +331,7 @@ func handleControlMessage(client *Client, msgType string, controlMsg map[string]
 	case "terminate":
 		log.Printf("Received terminate command from %s", client.GetPeerID())
 		client.SetStreaming(false)
-		gyroWriter.Close()
+		stdinWriter.Close()
 		return fmt.Errorf("client requested termination")
 
 	case "quality":

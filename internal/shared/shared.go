@@ -17,24 +17,19 @@ type SharedMemoryWriter struct {
 	size int
 }
 
-var gyro_stdin io.WriteCloser
+var shared_stdin io.WriteCloser
 
-var mediapipe_stdin io.WriteCloser
-
-func InitGyroStdin(stdin io.WriteCloser) {
-	gyro_stdin = stdin
+func InitSharedStdin(stdin io.WriteCloser) {
+	shared_stdin = stdin
 }
 
-func InitmediapipeStdin(stdin io.WriteCloser) {
-	mediapipe_stdin = stdin
-}
 
 func WriteStdinGyroData(jsondat []byte, isrunning bool) error {
 	/*payload := map[string]interface{}{
 		"type":    "Gyro",
 		"payload": json.RawMessage(jsondat),
 	}*/
-	if gyro_stdin == nil {
+	if shared_stdin == nil {
 		return fmt.Errorf("gyro_stdin is not initialized")
 	}
 	// jsondat, errj := json.Marshal(payload)
@@ -42,7 +37,7 @@ func WriteStdinGyroData(jsondat []byte, isrunning bool) error {
 		return fmt.Errorf("failed to create payload")
 	} */
 	jsondat = append(jsondat, '\n') // Ensure newline for proper parsing
-	_, err := gyro_stdin.Write(jsondat)
+	_, err := shared_stdin.Write(jsondat)
 	if err != nil {
 		log.Printf("Failed to write gyro data to stdin: %v", err)
 		return fmt.Errorf("failed to write gyro data to stdin: %w", err)
@@ -91,7 +86,7 @@ func WriteStdinHandData(jsondat []byte, isrunning bool) error {
 		"type":    "Hand",
 		"payload": json.RawMessage(jsondat),
 	}
-	if mediapipe_stdin == nil {
+	if shared_stdin == nil {
 		return fmt.Errorf("mediapipe_stdin is not initialized")
 	}
 	jsondat, errj := json.Marshal(payload)
@@ -99,7 +94,7 @@ func WriteStdinHandData(jsondat []byte, isrunning bool) error {
 		return fmt.Errorf("failed to create payload")
 	}
 	jsondat = append(jsondat, '\n') // Ensure newline for proper parsing
-	_, err := mediapipe_stdin.Write(jsondat)
+	_, err := shared_stdin.Write(jsondat)
 	if err != nil {
 		log.Printf("Failed to write gyro data to stdin: %v", err)
 		return fmt.Errorf("failed to write gyro data to stdin: %w", err)
