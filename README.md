@@ -174,11 +174,3 @@ Have questions or ideas?
 ---
 
 **Experience VR, Securely. In Your Browser.**
-
-
-- You can paste this directly into your `README.md`.
-- Add a `LICENSE` file (MIT or Apache 2.0).
-- Create a `go.mod` file (`go mod init vrwebapp`) if you haven’t.
-- Want me to generate Dockerfiles or deployment instructions too? Just ask.
-
-Let me know if you'd like the README in HTML format or want badges added (build status, MIT license, etc.).
