@@ -147,7 +147,7 @@ Then submit a PR via GitHub.
 
 This project is developed by [PrakyathPNayak](https://github.com/PrakyathPNayak) and [Prajwal R.](https://github.com/Deadly-pro).
 
-All code is currently released under the **MIT License**.
+All code is currently released under the **Apache 2.0 License**.
 
 See the [LICENSE](./LICENSE) file for details.
 
